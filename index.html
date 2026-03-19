@@ -3,9 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>NL42 Games - The Ultimate Goofy Arcade</title>
+    <meta name="description" content="Discover the most colorful and goofy games by NL42. 🌍🎄🐥💎">
+    <link rel="stylesheet" href="index.css">
 </head>
 <body>
-    
+    <div class="bg-overlay"></div>
+    <div class="shape shape-1"></div>
+    <div class="shape shape-2"></div>
+    <div class="shape shape-3"></div>
+
+    <header class="hero">
+        <h1 class="bounceIn">NL42<br>Games</h1>
+        <p>Your portal to pure digital silliness! 🌈🚀💥</p>
+    </header>
+
+    <main class="gallery grid">
+        <a href="games/africraft/africraft.html" class="card floating" style="animation-delay: 0s;">
+            <div class="icon">🌍</div>
+            <h2>Africraft</h2>
+            <span class="badge">Adventure</span>
+        </a>
+
+        <a href="games/chirstmas_simulator/christmas_simulator.html" class="card floating" style="animation-delay: 0.2s;">
+            <div class="icon">🎄</div>
+            <h2>Christmas Simulator</h2>
+            <span class="badge">Holiday</span>
+        </a>
+
+        <a href="games/flappyclone/index.html" class="card floating" style="animation-delay: 0.4s;">
+            <div class="icon">🐥</div>
+            <h2>Flappy Clone</h2>
+            <span class="badge">Arcade</span>
+        </a>
+
+        <a href="games/jew/jew.html" class="card floating" style="animation-delay: 0.6s;">
+            <div class="icon">🇮🇱</div>
+            <h2>Jew Collector</h2>
+            <span class="badge">Mystery</span>
+        </a>
+    </main>
+
+    <footer style="margin-top: 5rem; opacity: 0.5; font-size: 0.8rem; text-align: center; width: 100%; border-top: 1px solid rgba(255,255,255,0.1); padding: 2rem 0;">
+        <p>&copy; 2026 NL42 Games. All rights reserved by the Council of Goofiness.</p>
+    </footer>
+
+    <script>
+        // Simple sparkle effect on mouse move
+        document.addEventListener('mousemove', (e) => {
+            if (Math.random() > 0.9) {
+                const sparkle = document.createElement('div');
+                sparkle.textContent = '✨';
+                sparkle.style.position = 'fixed';
+                sparkle.style.left = e.clientX + 'px';
+                sparkle.style.top = e.clientY + 'px';
+                sparkle.style.pointerEvents = 'none';
+                sparkle.style.fontSize = '1.2rem';
+                sparkle.style.animation = 'sparkleAnim 1s ease-out forwards';
+                document.body.appendChild(sparkle);
+                setTimeout(() => sparkle.remove(), 1000);
+            }
+        });
+
+        // Add a style for sparkleAnim
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes sparkleAnim {
+                0% { transform: translateY(0) scale(1); opacity: 1; }
+                100% { transform: translateY(-50px) scale(0); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
 </body>
 </html>
