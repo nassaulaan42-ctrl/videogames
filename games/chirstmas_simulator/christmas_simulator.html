@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Der Lebkuchen Sprinter — Fachwerk Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;600&display=swap');
+    :root{
+      /* Palette */
+      --grid-size:15;
+      --cell-size:40;
+    }
+    body{
+      font-family:'Fredoka',sans-serif;
+      background:#111827; /* Dark night background */
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      min-height:100vh;
+      padding:20px;
+      margin:0;
+      color:#fff;
+    }
+    .main-ui{
+      background:#1f2937;
+      border: 2px solid #374151;
+      border-radius:16px;
+      padding:20px;
+      box-shadow:0 20px 50px rgba(0,0,0,0.6);
+      max-width:95vw;
+    }
+    .canvas-container{
+      width:600px;
+      height:600px;
+      border:8px solid #4b5563;
+      border-radius:12px;
+      position:relative;
+      overflow:hidden;
+      box-shadow:inset 0 0 50px rgba(0,0,0,0.5);
+    }
+    #game-canvas{ display:block; background:#111827; }
+    #game-message{
+      position:absolute; inset:0; display:none; z-index:40;
+      background:rgba(17, 24, 39, 0.95); color:white; display:flex;
+      flex-direction:column; align-items:center; justify-content:center;
+      gap:16px; padding:20px; text-align:center;
+      backdrop-filter: blur(4px);
+    }
+    .hud { display:flex; gap:12px; justify-content:center; margin-bottom:16px; }
+    button:active { transform:translateY(2px); }
+    #highscore-list li { @apply flex justify-between py-1 border-b border-gray-700 last:border-0; }
+    #highscore-list span:first-child { @apply font-semibold text-yellow-500; }
+    #highscore-list span:last-child { @apply text-gray-300 text-sm; }
+  </style>
+</head>
+<body>
+  <div class="main-ui flex flex-col items-center">
+    <h1 class="text-3xl font-bold text-yellow-500 border-b-2 border-red-800 pb-3 w-full text-center tracking-wide" style="text-shadow: 1px 1px 0 #000;">Maagdenburg Kerstmarkt 2024</h1>
+    <div class="hud mt-4">
+      <div id="score-display" class="bg-gray-700 border border-gray-600 text-gray-200 py-1 px-4 rounded-full text-sm font-semibold">Max: 0m</div>
+      <div id="lives-display" class="bg-red-900 border border-red-700 text-red-100 py-1 px-4 rounded-full text-sm font-semibold">❤❤❤</div>
+      <div id="points-display" class="bg-yellow-900 border border-yellow-700 text-yellow-100 py-1 px-4 rounded-full text-sm font-semibold">Pts: 0</div>
+    </div>
+
+    <div class="canvas-container">
+      <canvas id="game-canvas" width="600" height="600"></canvas>
+
+      <div id="game-message">
+        <h2 class="text-5xl font-extrabold text-red-500 mb-2">Game Over</h2>
+        <p id="final-score" class="text-xl text-gray-300 mb-4"></p>
+        <div class="bg-gray-800 p-4 rounded-lg w-full max-w-sm mb-4">
+            <h3 class="text-lg font-bold text-yellow-500 mb-2 border-b border-gray-700 pb-1">High Scores</h3>
+            <ul id="highscore-list" class="text-left w-full"></ul>
+        </div>
+        <div class="flex gap-4">
+          <button id="restart-button" class="px-8 py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold text-lg shadow-lg border-b-4 border-green-900 transition-all">Try Again (ENTER)</button>
+        </div>
+        <p class="text-xs text-gray-500 mt-4">Use Arrow Keys or WASD to run.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------------------- CONFIG & CACHE ---------------------- */
+const CANVAS = document.getElementById('game-canvas');
+const CTX = CANVAS.getContext('2d');
+const CANVAS_WIDTH = 600, CANVAS_HEIGHT = 600;
+CANVAS.width = CANVAS_WIDTH; CANVAS.height = CANVAS_HEIGHT;
+
+const GRID_SIZE = 15;
+const CELL_SIZE = CANVAS_WIDTH / GRID_SIZE;
+const HALF_CELL = CELL_SIZE / 2;
+
+// Visual Configuration
+const COLORS = {
+  SNOW: '#E5E7EB',
+  SNOW_SHADOW: '#D1D5DB',
+  COBBLE_BASE: '#262626',
+  COBBLE_LIGHT: '#363636',
+  CROWD_PATH: '#404040',
+  RIVER: '#1e3a8a',
+  LOG: '#5D4037',
+  ICE: '#A5F3FC',
+  PLAYER_BASE: '#2563EB',
+  PLAYER_SKIN: '#FCA5A5',
+  ICING: '#fbbf24',
+  LAMP_GLOW: 'rgba(251, 191, 36, 0.2)',
+  LAMP_CORE: '#FEF08A',
+  TREE_DEEP: '#022c16',
+  TREE_MID: '#064e3b',
+  TREE_LIGHT: '#065f46'
+};
+
+const TRUCK_PALETTE = ['#b91c1c', '#15803d', '#1d4ed8', '#b45309', '#be185d'];
+const CROWD_PALETTE = ['#be185d', '#1e40af', '#047857', '#b45309', '#4c1d95', '#374151', '#7c2d12'];
+const HIGH_SCORE_KEY = 'Kerstmarkt Maagdenburg_highscores';
+
+/* ---------------------- Audio (base64) ---------------------- */
+const collectSoundData = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAAAgD8A/wD/APH/8P/0//z//P/9//z//P/9//z//P/9//z//P/9//z//P/9//z//P/9//z//P/9//z//P/9//z//P/9//z//P/9//z/";
+const collectAudio = new Audio(collectSoundData);
+collectAudio.volume = 0.6;
+
+/* ---------------------- Helpers ---------------------- */
+function deepCloneLaneTemplate(tpl){ return { type: tpl.type, speed: tpl.speed, items: Array.isArray(tpl.items) ? tpl.items.slice() : [], density: tpl.density }; }
+function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r); ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r); ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath(); }
+function darkenColor(hex,percent){ let num = parseInt(hex.replace('#',''),16); let amt = Math.round(2.55*percent); let R = (num>>16)-amt, G = ((num>>8)&0xFF)-amt, B = (num&0xFF)-amt; R=Math.max(0,R);G=Math.max(0,G);B=Math.max(0,B); return '#'+(0x1000000 + (R<<16)+(G<<8)+B).toString(16).slice(1); }
+function getHighScores() { const scores = localStorage.getItem(HIGH_SCORE_KEY); return scores ? JSON.parse(scores) : []; }
+function saveHighScore(score) { const scores = getHighScores(); const date = new Date().toLocaleDateString(); scores.push({ score, date }); scores.sort((a, b) => b.score - a.score); const topScores = scores.slice(0, 5); localStorage.setItem(HIGH_SCORE_KEY, JSON.stringify(topScores)); return topScores; }
+
+/* ---------------------- Template & State ---------------------- */
+const LANE_TEMPLATES = {
+  // Added '🏠' for German House
+  SNOW: { type:'snow', speed:0, items:['🎄','🎁','🎪','💡','🏚️','🪨','🏠'], density:0.38 },
+  ROAD: { type:'road', speed:2.4, items:['🚚'], density:0.45 },
+  RIVER:{ type:'river', speed:1.4, items:['🪵','🧊'], density:0.55 },
+  CROWD:{ type:'crowd', speed:0.7, items:['👥'], density:0.45 } 
+};
+
+let state = { lanes: [], player: { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE-1, max_y: GRID_SIZE-1, lives:3, points:0, jumpOffset:0, isJumping:false }, scrollOffset: 0, maxDistance: 0, animationFrame: null, lastTime: 0, isGameOver: false, consecutiveSnow: 0 };
+let obstacleKeyCounter = 0;
+
+/* ---------------------- Visuals ---------------------- */
+function drawSnowPath(ctx, rowIndex) {
+  const y = rowIndex * CELL_SIZE;
+  ctx.fillStyle = COLORS.SNOW; ctx.fillRect(0, y, CANVAS_WIDTH, CELL_SIZE);
+  ctx.fillStyle = COLORS.SNOW_SHADOW; const seed = rowIndex * 13; 
+  for(let i=0; i<GRID_SIZE*1.5; i++) {
+    const rX = (Math.sin(seed + i * 7) * 0.5 + 0.5) * CANVAS_WIDTH;
+    const rY = y + (Math.cos(seed + i * 11) * 0.5 + 0.5) * CELL_SIZE;
+    const rW = (Math.sin(seed + i * 3) * 0.5 + 0.5) * 30 + 10; const rH = (Math.cos(seed + i * 5) * 0.5 + 0.5) * 15 + 5;
+    ctx.beginPath(); ctx.ellipse(rX, rY, rW/2, rH/2, 0, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function drawCobblestoneRoad(ctx, rowIndex) {
+  const y = rowIndex * CELL_SIZE;
+  ctx.fillStyle = COLORS.COBBLE_BASE; ctx.fillRect(0, y, CANVAS_WIDTH, CELL_SIZE);
+  ctx.fillStyle = COLORS.COBBLE_LIGHT;
+  const stoneW = CELL_SIZE * 0.4, stoneH = CELL_SIZE * 0.25, gap = 4;
+  for(let x=0; x<GRID_SIZE*2.5; x++){
+    const xPos = (x * (stoneW + gap)) - (rowIndex%2 * stoneW/2);
+    roundRect(ctx, xPos, y + gap, stoneW, stoneH, 2); ctx.fill();
+    roundRect(ctx, xPos + stoneW/2, y + CELL_SIZE/2 + gap, stoneW, stoneH, 2); ctx.fill();
+  }
+  if (rowIndex % 3 !== 0) {
+    const lightX = ((rowIndex * 17) % GRID_SIZE) * CELL_SIZE;
+    const grad = ctx.createRadialGradient(lightX, y+HALF_CELL, 0, lightX, y+HALF_CELL, CELL_SIZE*1.5);
+    grad.addColorStop(0, COLORS.LAMP_GLOW); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad; ctx.fillRect(lightX - CELL_SIZE*1.5, y, CELL_SIZE*3, CELL_SIZE);
+  }
+}
+
+function drawLampPost(x, y) {
+  const px = x * CELL_SIZE, py = y * CELL_SIZE, cx = px + HALF_CELL;
+  CTX.fillStyle = '#111'; CTX.fillRect(cx - 2, py + CELL_SIZE*0.3, 4, CELL_SIZE*0.7);
+  CTX.beginPath(); CTX.moveTo(cx - 5, py + CELL_SIZE); CTX.lineTo(cx + 5, py + CELL_SIZE); CTX.lineTo(cx, py + CELL_SIZE*0.8); CTX.fill();
+  CTX.fillRect(cx - 6, py + CELL_SIZE*0.15, 12, CELL_SIZE*0.25);
+  CTX.save(); CTX.shadowColor = COLORS.ICING; CTX.shadowBlur = 15; CTX.fillStyle = COLORS.LAMP_CORE;
+  CTX.fillRect(cx - 4, py + CELL_SIZE*0.2, 8, CELL_SIZE*0.15); CTX.restore();
+}
+
+function drawTruck(x, y, width, colorCode) {
+  const px = x * CELL_SIZE, py = y * CELL_SIZE, w = width * CELL_SIZE, h = CELL_SIZE * 0.75, top = py + CELL_SIZE*0.15;
+  const baseColor = colorCode || COLORS.TRUCK_PALETTE[0];
+  const grad = CTX.createLinearGradient(px, top, px, top+h);
+  grad.addColorStop(0, baseColor); grad.addColorStop(1, darkenColor(baseColor, 20));
+  CTX.fillStyle = grad; roundRect(CTX, px+2, top, w-4, h, 6); CTX.fill();
+  CTX.fillStyle = '#f3f4f6'; roundRect(CTX, px + 10, top + 4, w*0.6, h*0.5, 2); CTX.fill();
+  CTX.fillStyle = '#1e293b';
+  if(state.lanes[Math.round(y)].speed > 0) { CTX.fillRect(px + w - 12, top + 8, 8, h*0.4); CTX.fillStyle = '#fef08a'; CTX.beginPath(); CTX.arc(px+w-2, top+h-8, 3, 0, Math.PI*2); CTX.fill(); } 
+  else { CTX.fillRect(px + 4, top + 8, 8, h*0.4); CTX.fillStyle = '#fef08a'; CTX.beginPath(); CTX.arc(px+2, top+h-8, 3, 0, Math.PI*2); CTX.fill(); }
+  CTX.fillStyle = '#111'; CTX.beginPath(); CTX.arc(px + w*0.25, top + h, 5, 0, Math.PI*2); CTX.fill(); CTX.beginPath(); CTX.arc(px + w*0.75, top + h, 5, 0, Math.PI*2); CTX.fill();
+}
+
+function drawShoppers(x, y, width, obstacleKey) {
+  const px = x * CELL_SIZE; const py = y * CELL_SIZE; const w = width * CELL_SIZE;
+  const now = performance.now(); const baseSeed = obstacleKey * 17; 
+  const count = Math.floor(width * 2.8); 
+  for(let i=0; i<count; i++) {
+    const personSeed = baseSeed + i * 13;
+    const rX = (Math.sin(personSeed) * 0.5 + 0.5) * (w - 16) + 8;
+    const rY = (Math.cos(personSeed * 1.1) * 0.5 + 0.5) * (CELL_SIZE - 18) + 9;
+    const jostleX = Math.sin(now / 400 + personSeed) * 2.5;
+    const jostleY = Math.cos(now / 350 + personSeed) * 1.5;
+    const cx = px + rX + jostleX; const cy = py + rY + jostleY;
+    const colorIdx = Math.abs((personSeed + i) % CROWD_PALETTE.length);
+    const coatColor = CROWD_PALETTE[colorIdx];
+    CTX.fillStyle = coatColor; CTX.beginPath(); CTX.arc(cx, cy+4, 6, Math.PI, 0); CTX.fill(); CTX.fillRect(cx-6, cy+4, 12, 8); 
+    CTX.fillStyle = '#fca5a5'; CTX.beginPath(); CTX.arc(cx, cy-2, 4, 0, Math.PI*2); CTX.fill();
+    CTX.fillStyle = darkenColor(coatColor, 10); CTX.beginPath(); CTX.arc(cx, cy-3.5, 4, Math.PI, 0); CTX.fill();
+    if(i % 4 === 0) { CTX.fillStyle = '#fbbf24'; CTX.fillRect(cx + 4, cy + 4, 5, 7); CTX.strokeStyle = '#7c2d12'; CTX.lineWidth=1; CTX.beginPath(); CTX.moveTo(cx+4, cy+4); CTX.lineTo(cx+6, cy+2); CTX.lineTo(cx+9, cy+4); CTX.stroke(); }
+  }
+}
+
+function drawCrossyHuman(x,y,jumpOffset){
+  const px = x * CELL_SIZE, py = y * CELL_SIZE, cx = px + HALF_CELL, cy = py + HALF_CELL - jumpOffset;
+  const headSize = CELL_SIZE * 0.55, bodyW = CELL_SIZE * 0.4, bodyH = CELL_SIZE * 0.42;
+  CTX.fillStyle = COLORS.PLAYER_SKIN; roundRect(CTX, cx - headSize/2, cy - headSize/2 - 6, headSize, headSize, 6); CTX.fill();
+  CTX.fillStyle = '#dc2626'; CTX.beginPath(); CTX.arc(cx, cy - headSize - 2, headSize/2, Math.PI, 0); CTX.fill();
+  CTX.fillStyle = '#fff'; CTX.beginPath(); CTX.arc(cx, cy - headSize - 6, 4, 0, Math.PI*2); CTX.fill();
+  CTX.fillStyle = '#000'; CTX.fillRect(cx - 8, cy - headSize*0.18 - 6, 3, 3); CTX.fillRect(cx + 5, cy - headSize*0.18 - 6, 3, 3);
+  CTX.fillStyle = COLORS.PLAYER_BASE; roundRect(CTX, cx - bodyW/2, cy - bodyH/2 + 8, bodyW, bodyH, 4); CTX.fill();
+  CTX.fillStyle = '#1e3a8a'; CTX.fillRect(cx - bodyW/2 + 2, cy + bodyH/2 + 8, bodyW*0.3, bodyH*0.6); CTX.fillRect(cx + bodyW/2 - 2 - bodyW*0.3, cy + bodyH/2 + 8, bodyW*0.3, bodyH*0.6);
+}
+
+function drawBavarianTree(x,y){
+  const {x:px,y:py} = gridToScreen(x,y); const cx = px + HALF_CELL;
+  CTX.fillStyle='#3E2723'; CTX.fillRect(cx-4, py+CELL_SIZE*0.8, 8, CELL_SIZE*0.2);
+  CTX.fillStyle=COLORS.TREE_DEEP; CTX.beginPath(); CTX.moveTo(cx-20, py+CELL_SIZE*0.85); CTX.lineTo(cx+20, py+CELL_SIZE*0.85); CTX.lineTo(cx, py+CELL_SIZE*0.4); CTX.fill();
+  CTX.fillStyle=COLORS.TREE_MID; CTX.beginPath(); CTX.moveTo(cx-16, py+CELL_SIZE*0.6); CTX.lineTo(cx+16, py+CELL_SIZE*0.6); CTX.lineTo(cx, py+CELL_SIZE*0.2); CTX.fill();
+  CTX.fillStyle=COLORS.TREE_LIGHT; CTX.beginPath(); CTX.moveTo(cx-12, py+CELL_SIZE*0.35); CTX.lineTo(cx+12, py+CELL_SIZE*0.35); CTX.lineTo(cx, py+CELL_SIZE*0.05); CTX.fill();
+  CTX.fillStyle=COLORS.SNOW;
+  roundRect(CTX, cx-19, py+CELL_SIZE*0.8, 8, 4, 2); CTX.fill(); roundRect(CTX, cx+11, py+CELL_SIZE*0.8, 8, 4, 2); CTX.fill();
+  roundRect(CTX, cx-15, py+CELL_SIZE*0.55, 6, 4, 2); CTX.fill(); roundRect(CTX, cx+9, py+CELL_SIZE*0.55, 6, 4, 2); CTX.fill();
+  CTX.beginPath(); CTX.arc(cx, py+CELL_SIZE*0.05, 4, 0, Math.PI*2); CTX.fill();
+  CTX.save(); CTX.shadowColor = COLORS.ICING; CTX.shadowBlur = 6; CTX.fillStyle = COLORS.ICING;
+  const seed = x * 11 + y * 7; const rnd = (off) => Math.sin(seed+off)*0.5+0.5;
+  const lights = [{x:-10,y:0.7,s:1},{x:8,y:0.6,s:2},{x:-5,y:0.4,s:3},{x:2,y:0.25,s:4},{x:0,y:0.5,s:5},{x:-8,y:0.2,s:6},{x:6,y:0.8,s:7}];
+  lights.forEach(L => { if(rnd(L.s) > 0.4) { CTX.beginPath(); CTX.arc(cx+L.x, py+CELL_SIZE*L.y, 3, 0, Math.PI*2); CTX.fill(); } });
+  CTX.restore();
+}
+
+function drawPresent(x,y){ const {x:px,y:py} = gridToScreen(x,y); const size = CELL_SIZE*0.5; const off=(CELL_SIZE-size)/2; CTX.fillStyle='#EF4444'; roundRect(CTX,px+off,py+off,size,size,2); CTX.fill(); CTX.fillStyle = COLORS.ICING; CTX.fillRect(px+off+size/2-2, py+off, 4, size); CTX.fillRect(px+off, py+off+size/2-2, size, 4); }
+
+function drawStall(x,y){ 
+  const {x:px,y:py} = gridToScreen(x,y); const w=CELL_SIZE*0.9, h=CELL_SIZE*0.9; const sx=px+CELL_SIZE*0.05, sy=py+CELL_SIZE*0.05; 
+  CTX.fillStyle = '#78350f'; CTX.fillRect(sx+2, sy+h*0.4, w-4, h*0.6); 
+  CTX.fillStyle='#fff'; CTX.fillRect(sx+4, sy+h*0.5, w-8, h*0.2); 
+  for(let i=0;i<5;i++){ CTX.fillStyle = i%2===0?'#991b1b':'#f3f4f6'; CTX.beginPath(); CTX.moveTo(sx+(i*w/5), sy+h*0.4); CTX.lineTo(sx+((i+1)*w/5), sy+h*0.4); CTX.lineTo(sx+w/2, sy); CTX.fill(); }
+  const flagW = w * 0.3; const flagH = h * 0.25; const fx = sx + w/2 - flagW/2; const fy = sy + h*0.35;
+  CTX.fillStyle = '#000000'; CTX.fillRect(fx, fy, flagW, flagH/3);
+  CTX.fillStyle = '#DD0000'; CTX.fillRect(fx, fy + flagH/3, flagW, flagH/3);
+  CTX.fillStyle = '#FFCC00'; CTX.fillRect(fx, fy + (flagH/3)*2, flagW, flagH/3);
+}
+
+function drawGlühweinStall(x,y){
+  const {x:px,y:py} = gridToScreen(x,y); const w=CELL_SIZE*0.9, h=CELL_SIZE*0.9; const sx=px+CELL_SIZE*0.05, sy=py+CELL_SIZE*0.05;
+  CTX.fillStyle = '#5c3a21'; CTX.fillRect(sx+2, sy+h*0.4, w-4, h*0.6);
+  CTX.fillStyle='#d4a373'; CTX.fillRect(sx+4, sy+h*0.5, w-8, h*0.2);
+  CTX.fillStyle='#b91c1c'; CTX.beginPath(); CTX.arc(sx+w/2, sy+h*0.6, 6, 0, Math.PI*2); CTX.fill(); 
+  CTX.strokeStyle='#b91c1c'; CTX.lineWidth=2; CTX.beginPath(); CTX.arc(sx+w/2+6, sy+h*0.6, 3, Math.PI*1.5, Math.PI*0.5); CTX.stroke();
+  for(let i=0;i<5;i++){ CTX.fillStyle = i%2===0?'#166534':'#f0fdf4'; CTX.beginPath(); CTX.moveTo(sx+(i*w/5), sy+h*0.4); CTX.lineTo(sx+((i+1)*w/5), sy+h*0.4); CTX.lineTo(sx+w/2, sy); CTX.fill(); }
+  const flagW = w * 0.3; const flagH = h * 0.25; const fx = sx + w/2 - flagW/2; const fy = sy + h*0.35;
+  CTX.fillStyle = '#000000'; CTX.fillRect(fx, fy, flagW, flagH/3);
+  CTX.fillStyle = '#DD0000'; CTX.fillRect(fx, fy + flagH/3, flagW, flagH/3);
+  CTX.fillStyle = '#FFCC00'; CTX.fillRect(fx, fy + (flagH/3)*2, flagW, flagH/3);
+}
+
+function drawBollard(x,y){
+    const {x:px,y:py} = gridToScreen(x,y); const cx = px + HALF_CELL;
+    CTX.fillStyle = '#9ca3af'; CTX.beginPath(); CTX.moveTo(cx-10, py+CELL_SIZE-2); CTX.lineTo(cx+10, py+CELL_SIZE-2); CTX.lineTo(cx+8, py+CELL_SIZE*0.3); CTX.lineTo(cx-8, py+CELL_SIZE*0.3); CTX.fill();
+    CTX.fillStyle = '#d1d5db'; CTX.beginPath(); CTX.ellipse(cx, py+CELL_SIZE*0.3, 8, 4, 0, 0, Math.PI*2); CTX.fill();
+    CTX.fillStyle = '#fbbf24'; CTX.fillRect(cx-9, py+CELL_SIZE*0.7, 18, 6);
+}
+
+/* NEW: Classic German Half-Timbered House (Fachwerkhaus) */
+function drawGermanHouse(x,y){
+  const {x:px,y:py} = gridToScreen(x,y); const w=CELL_SIZE*1.2, h=CELL_SIZE*1.2; const sx=px-CELL_SIZE*0.1, sy=py-CELL_SIZE*0.2;
+  
+  // Ground floor (Stone/Plaster)
+  CTX.fillStyle = '#e5e7eb'; CTX.fillRect(sx+4, sy+h*0.5, w-8, h*0.5);
+  
+  // Upper floor (Half-timbered framing)
+  CTX.fillStyle = '#fef3c7'; CTX.fillRect(sx+2, sy+h*0.2, w-4, h*0.3); // Plaster fill
+  CTX.strokeStyle = '#451a03'; CTX.lineWidth = 3; // Dark wood timber
+  CTX.strokeRect(sx+2, sy+h*0.2, w-4, h*0.3); // Frame
+  CTX.beginPath(); 
+  CTX.moveTo(sx+w/2, sy+h*0.2); CTX.lineTo(sx+w/2, sy+h*0.5); // Center post
+  CTX.moveTo(sx+2, sy+h*0.2); CTX.lineTo(sx+w/2, sy+h*0.5); // Diagonals
+  CTX.moveTo(sx+w-2, sy+h*0.2); CTX.lineTo(sx+w/2, sy+h*0.5);
+  CTX.stroke();
+
+  // Roof
+  CTX.fillStyle = '#991b1b'; CTX.beginPath(); CTX.moveTo(sx, sy+h*0.25); CTX.lineTo(sx+w, sy+h*0.25); CTX.lineTo(sx+w/2, sy-h*0.1); CTX.fill();
+  
+  // Windows
+  CTX.fillStyle = '#9ca3af'; CTX.fillRect(sx+w*0.15, sy+h*0.3, w*0.2, h*0.15); CTX.fillRect(sx+w*0.65, sy+h*0.3, w*0.2, h*0.15);
+  CTX.fillStyle = '#FEF08A'; CTX.fillRect(sx+w*0.15+2, sy+h*0.3+2, w*0.2-4, h*0.15-4); CTX.fillRect(sx+w*0.65+2, sy+h*0.3+2, w*0.2-4, h*0.15-4);
+
+  // German Flag on roof
+  const flagW = w * 0.25; const flagH = h * 0.2; const fx = sx + w/2 - flagW/2; const fy = sy;
+  CTX.fillStyle = '#000000'; CTX.fillRect(fx, fy, flagW, flagH/3);
+  CTX.fillStyle = '#DD0000'; CTX.fillRect(fx, fy + flagH/3, flagW, flagH/3);
+  CTX.fillStyle = '#FFCC00'; CTX.fillRect(fx, fy + (flagH/3)*2, flagW, flagH/3);
+}
+
+
+function drawLog(x,y,w){ const px=x*CELL_SIZE, py=y*CELL_SIZE; CTX.fillStyle=COLORS.LOG; roundRect(CTX,px+2,py+8,w*CELL_SIZE-4,CELL_SIZE-16,8); CTX.fill(); CTX.fillStyle='#5D4037'; CTX.beginPath(); CTX.ellipse(px+8, py+HALF_CELL, 4, CELL_SIZE*0.3, 0,0,Math.PI*2); CTX.fill(); }
+function drawIce(x,y,w){ const px=x*CELL_SIZE, py=y*CELL_SIZE; CTX.fillStyle='rgba(165, 243, 252, 0.8)'; roundRect(CTX,px+2,py+6,w*CELL_SIZE-4,CELL_SIZE-12,4); CTX.fill(); CTX.strokeStyle='#fff'; CTX.lineWidth=2; CTX.stroke(); }
+function gridToScreen(x,y){ return { x: x * CELL_SIZE, y: y * CELL_SIZE }; }
+
+/* ---------------------- Logic ---------------------- */
+function generateObstaclesFor(config){
+  let obstacles = [];
+  if(config.type === 'road' || config.type === 'river' || config.type === 'crowd'){
+    const maxLen = config.type === 'road' ? 2 : (config.type === 'crowd' ? 3 : 4);
+    for(let x=0; x<GRID_SIZE; ){
+      if(Math.random() < config.density){
+        const length = Math.floor(Math.random()*maxLen) + 1;
+        const item = config.items[Math.floor(Math.random()*config.items.length)];
+        let color = null; if(item === '🚚') color = TRUCK_PALETTE[Math.floor(Math.random() * TRUCK_PALETTE.length)];
+        obstacles.push({ 
+            key: obstacleKeyCounter++, 
+            x: x + Math.random()*0.6, 
+            length, 
+            item, 
+            color, 
+            isSolid: config.type === 'road', 
+            isPlatform: (item === '🪵' || item === '🧊'), 
+            isCollectible: false 
+        });
+        x += length + (Math.floor(Math.random()*3)+2);
+      } else x++;
+    }
+    // Safety
+    if(obstacles.length === 0){ 
+        const item = config.items[0]; 
+        obstacles.push({ key: obstacleKeyCounter++, x: 2, length: 2, item, isSolid: config.type==='road', isPlatform: item!=='🚚', color: item==='🚚'?TRUCK_PALETTE[0]:null}); 
+    }
+  } else if(config.type === 'snow'){
+    for(let x=0; x<GRID_SIZE; ){
+      if(Math.random() < config.density){
+        const item = config.items[Math.floor(Math.random()*config.items.length)];
+        // House is solid
+        obstacles.push({ key: obstacleKeyCounter++, x: x, length: 1, item, isSolid: (item !== '🎁'), isCollectible: (item === '🎁'), isPlatform: false });
+        x += 2;
+      } else x++;
+    }
+  }
+  return obstacles;
+}
+
+function generateLane(isSafeZone = false){
+  let tpl;
+  if(isSafeZone){ tpl = LANE_TEMPLATES.SNOW; state.consecutiveSnow = 0; }
+  else {
+    const r = Math.random();
+    if(state.consecutiveSnow >= 2){ 
+        const d = Math.random();
+        if(d < 0.4) tpl = LANE_TEMPLATES.ROAD;
+        else if(d < 0.7) tpl = LANE_TEMPLATES.RIVER;
+        else tpl = LANE_TEMPLATES.CROWD;
+        state.consecutiveSnow = 0; 
+    } else { 
+      if(r < 0.3){ tpl = LANE_TEMPLATES.ROAD; state.consecutiveSnow=0; } 
+      else if(r < 0.5){ tpl = LANE_TEMPLATES.RIVER; state.consecutiveSnow=0; } 
+      else if(r < 0.7){ tpl = LANE_TEMPLATES.CROWD; state.consecutiveSnow=0; } 
+      else { tpl = LANE_TEMPLATES.SNOW; state.consecutiveSnow++; } 
+    }
+  }
+  const lane = deepCloneLaneTemplate(tpl);
+  if(lane.speed > 0) lane.speed = (Math.random() > 0.5 ? 1 : -1) * (1.2 + Math.random()*0.8);
+  if(lane.type === 'crowd') lane.speed = (Math.random() > 0.5 ? 1 : -1) * 0.7; // Slower crowd
+  lane.obstacles = generateObstaclesFor(lane);
+  return lane;
+}
+
+function checkCollision(playerX, playerY, newX, newY){
+  const lane = state.lanes[newY]; if(!lane) return { canMove:true, action:null };
+  const targetCenter = newX + 0.5;
+  if(lane.type === 'snow'){
+    const solidIndex = lane.obstacles.findIndex(obs => obs.isSolid && targetCenter >= Math.floor(obs.x) && targetCenter < Math.floor(obs.x + obs.length));
+    if(solidIndex !== -1) return { canMove:false, action:null };
+    const collectIdx = lane.obstacles.findIndex(obs => obs.isCollectible && targetCenter >= Math.floor(obs.x) && targetCenter < Math.floor(obs.x + obs.length));
+    if(collectIdx !== -1) return { canMove:true, action:{ type:'collect', obstacleKey: lane.obstacles[collectIdx].key } };
+  }
+  return { canMove:true, action:null };
+}
+
+function movePlayer(direction){
+  if(state.isGameOver || state.player.isJumping) return;
+  let newX = Math.floor(state.player.x), newY = state.player.y;
+  switch(direction){ case 'UP': newY--; break; case 'DOWN': newY++; break; case 'LEFT': newX--; break; case 'RIGHT': newX++; break; }
+  if(newY < 0 || newY >= GRID_SIZE || newX < -1 || newX > GRID_SIZE) return;
+  const col = checkCollision(state.player.x, state.player.y, newX, newY);
+  if(!col.canMove) return;
+  state.player.isJumping = true;
+  const startX = state.player.x, startY = state.player.y, jumpDuration = 150, startTime = performance.now();
+  function step(t){
+    const elapsed = t - startTime, p = Math.min(1, elapsed / jumpDuration);
+    state.player.jumpOffset = Math.sin(p * Math.PI) * 15;
+    state.player.x = startX + (newX - startX)*p; state.player.y = startY + (newY - startY)*p;
+    renderGame();
+    if(p < 1) requestAnimationFrame(step);
+    else {
+      state.player.x = newX; state.player.y = newY; state.player.jumpOffset = 0; state.player.isJumping = false;
+      const lane = state.lanes[state.player.y];
+      if(col.action?.type === 'collect' && lane){
+        const idx = lane.obstacles.findIndex(o => o.isCollectible && Math.floor(o.x) === state.player.x);
+        if(idx !== -1){ lane.obstacles.splice(idx,1); state.player.points += 50; try{collectAudio.currentTime=0;collectAudio.play();}catch(e){} }
+      }
+      if(state.player.y < state.player.max_y){ state.player.max_y = state.player.y; const curDist = state.scrollOffset + (GRID_SIZE - 1 - state.player.max_y); if(curDist > state.maxDistance) state.maxDistance = curDist; }
+      if(state.player.y < Math.floor(GRID_SIZE/3)){ scrollMap(1); state.player.y++; state.player.max_y = state.player.y; }
+      updateScore(); renderGame();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function scrollMap(rows){ state.scrollOffset += rows; for(let i=0;i<rows;i++) state.lanes.pop(); for(let i=0;i<rows;i++) state.lanes.unshift(generateLane(false)); }
+function initGame(){
+  state.lanes = []; state.player = { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE-1, max_y: GRID_SIZE-1, lives:3, points:0, jumpOffset:0, isJumping:false }; 
+  state.scrollOffset = 0; state.maxDistance = 0; state.isGameOver=false; state.consecutiveSnow=0;
+  for(let i=0;i<GRID_SIZE*2;i++){ const isSafe = (i >= GRID_SIZE-3) || (i < 3); state.lanes.push(generateLane(isSafe)); }
+  for(let i=GRID_SIZE-3; i<GRID_SIZE; i++){ if(state.lanes[i]){ state.lanes[i].type='snow'; state.lanes[i].obstacles=[]; } }
+  document.getElementById('game-message').style.display = 'none'; updateScore();
+  if(state.animationFrame) cancelAnimationFrame(state.animationFrame); state.lastTime = performance.now(); state.animationFrame = requestAnimationFrame(gameLoop);
+}
+
+function gameLoop(now){
+  if(state.isGameOver) return;
+  let delta = now - state.lastTime; if(delta > 100) delta = 100; state.lastTime = now; const dt = delta / 1000;
+  state.lanes.forEach(lane => { if(lane.type === 'road' || lane.type === 'river' || lane.type === 'crowd'){ lane.obstacles.forEach(obs => { obs.x += lane.speed * dt; if(lane.speed > 0 && obs.x > GRID_SIZE) obs.x -= (GRID_SIZE + obs.length); else if(lane.speed < 0 && obs.x < -obs.length) obs.x += (GRID_SIZE + obs.length); }); } });
+  
+  const playerLane = state.lanes[Math.round(state.player.y)], playerCenter = state.player.x + 0.5;
+  if(playerLane){
+    if(playerLane.type === 'road' || playerLane.type === 'crowd'){ 
+        const hit = playerLane.obstacles.find(o => (o.item === '🚚' || o.item === '👥') && playerCenter >= o.x && playerCenter < (o.x + o.length)); 
+        if(hit && !state.player.isJumping) playerHit(); 
+    } 
+    else if(playerLane.type === 'river'){ 
+        const platform = playerLane.obstacles.find(o => o.isPlatform && playerCenter >= o.x && playerCenter < (o.x + o.length)); 
+        if(platform){ state.player.x += playerLane.speed * dt; if(state.player.x < -0.5 || state.player.x > GRID_SIZE-0.5) playerHit(); } 
+        else { if(!state.player.isJumping) playerHit(); } 
+    }
+  }
+  renderGame(); state.animationFrame = requestAnimationFrame(gameLoop);
+}
+
+function playerHit(){
+  state.player.lives--; updateScore();
+  if(state.player.lives <= 0) gameOver();
+  else { state.player.x = Math.floor(GRID_SIZE/2); state.player.y = GRID_SIZE - 1; state.player.max_y = GRID_SIZE - 1; state.player.isJumping = false; state.player.jumpOffset = 0; }
+}
+function updateScore(){ document.getElementById('score-display').textContent = `Max: ${state.maxDistance}m`; document.getElementById('lives-display').textContent = `Lives: ${"❤".repeat(state.player.lives)}`; document.getElementById('points-display').textContent = `Pts: ${state.player.points}`; }
+function gameOver(){ state.isGameOver = true; cancelAnimationFrame(state.animationFrame); const topScores = saveHighScore(state.player.points); document.getElementById('final-score').textContent = `Score: ${state.player.points} | Distance: ${state.maxDistance}m`; const highscoreList = document.getElementById('highscore-list'); highscoreList.innerHTML = topScores.map((s, i) => `<li><span>#${i+1} ${s.score} Pts</span><span>${s.date}</span></li>`).join(''); document.getElementById('game-message').style.display = 'flex'; }
+
+function renderGame(){
+  CTX.clearRect(0,0,CANVAS_WIDTH,CANVAS_HEIGHT); const visible = state.lanes.slice(0, GRID_SIZE);
+  visible.forEach((lane, rowIndex) => { 
+      if(lane.type === 'road') drawCobblestoneRoad(CTX, rowIndex); 
+      else if (lane.type === 'river'){ CTX.fillStyle = COLORS.RIVER; CTX.fillRect(0, rowIndex*CELL_SIZE, CANVAS_WIDTH, CELL_SIZE); } 
+      else if (lane.type === 'crowd'){ CTX.fillStyle = COLORS.CROWD_PATH; CTX.fillRect(0, rowIndex*CELL_SIZE, CANVAS_WIDTH, CELL_SIZE); }
+      else { drawSnowPath(CTX, rowIndex); } 
+  });
+  for(let row=0; row<GRID_SIZE; row++){
+    const lane = visible[row]; if(!lane) continue;
+    lane.obstacles.forEach(obs => {
+      if(lane.type === 'road') drawTruck(obs.x, row, obs.length, obs.color);
+      else if(lane.type === 'river'){ if(obs.item === '🪵') drawLog(obs.x, row, obs.length); else if(obs.item === '🧊') drawIce(obs.x, row, obs.length); } 
+      else if(lane.type === 'crowd'){ drawShoppers(obs.x, row, obs.length, obs.key); }
+      else { const sx = Math.floor(obs.x); 
+        if(obs.item === '🎄') drawBavarianTree(sx, row); 
+        else if(obs.item === '🎁') drawPresent(sx, row); 
+        else if(obs.item === '🎪') drawStall(sx, row); 
+        else if(obs.item === '🏚️') drawGlühweinStall(sx, row);
+        else if(obs.item === '💡') drawLampPost(sx, row); 
+        else if(obs.item === '🪨') drawBollard(sx, row);
+        // NEW: Draw House
+        else if(obs.item === '🏠') drawGermanHouse(sx, row);
+      }
+    });
+  }
+  drawCrossyHuman(state.player.x, state.player.y, state.player.jumpOffset);
+}
+
+window.addEventListener('keydown', (e) => { if(['ArrowUp','w','W'].includes(e.key)){ e.preventDefault(); movePlayer('UP'); } if(['ArrowDown','s','S'].includes(e.key)){ e.preventDefault(); movePlayer('DOWN'); } if(['ArrowLeft','a','A'].includes(e.key)){ e.preventDefault(); movePlayer('LEFT'); } if(['ArrowRight','d','D'].includes(e.key)){ e.preventDefault(); movePlayer('RIGHT'); } if(e.key === 'Enter' && state.isGameOver) initGame(); });
+document.getElementById('restart-button').addEventListener('click', initGame);
+window.onload = initGame;
+</script>
+</body>
+</html>

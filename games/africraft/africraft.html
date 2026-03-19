@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Namib Desert Sandbox</title>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; font-family:'Courier New',monospace; background:#d4a55a; }
+
+#crosshair {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:18px; height:18px; pointer-events:none;
+}
+#crosshair::before,#crosshair::after {
+  content:''; position:absolute; background:rgba(255,255,255,0.9);
+}
+#crosshair::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
+#crosshair::after  { width:100%; height:2px; top:50%; transform:translateY(-50%); }
+
+#controls-hint {
+  position:absolute; top:12px; left:12px;
+  color:#fff; background:rgba(0,0,0,0.52);
+  padding:10px 14px; border-radius:4px;
+  font-size:12px; line-height:1.9; pointer-events:none;
+  transition:opacity 1.2s ease;
+}
+#controls-hint.hidden { opacity:0; pointer-events:none; }
+#controls-hint b { font-size:13px; }
+
+#hotbar {
+  position:absolute; bottom:14px; left:50%;
+  transform:translateX(-50%);
+  display:flex; gap:3px;
+  background:rgba(0,0,0,0.38);
+  padding:4px; border-radius:5px;
+  border:1px solid rgba(255,255,255,0.12);
+}
+.slot {
+  position:relative; width:52px; height:56px;
+  border:2px solid rgba(255,255,255,0.22); border-radius:3px;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  cursor:pointer; user-select:none; gap:3px;
+}
+.slot.active { border-color:#ffe033; background:rgba(255,224,51,0.1); }
+.swatch {
+  width:28px; height:28px; border-radius:2px;
+  border:1px solid rgba(0,0,0,0.45);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,0.28), inset 3px 0 0 rgba(255,255,255,0.14);
+}
+.slot-label { color:#fff; font-size:7.5px; text-align:center; line-height:1.1; text-shadow:1px 1px 0 #000; max-width:48px; }
+.slot-num { position:absolute; top:2px; left:4px; color:rgba(255,255,255,0.65); font-size:9px; text-shadow:1px 1px 0 #000; }
+.slot-count { position:absolute; bottom:2px; right:4px; color:#fff; font-size:9px; font-weight:bold; text-shadow:1px 1px 0 #000; }
+
+#statusbars {
+  position:absolute; bottom:80px; left:50%;
+  transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  pointer-events:none;
+}
+.bar-row { display:flex; gap:1px; align-items:center; }
+.heart-pip { font-size:14px; line-height:1; }
+.drum-pip  { width:18px; height:18px; display:inline-block; }
+.drum-pip svg { display:block; }
+
+#sel-label {
+  position:absolute; bottom:76px; left:50%;
+  transform:translateX(-50%);
+  color:rgba(255,255,255,0.85); font-size:11px;
+  text-shadow:1px 1px 0 #000; pointer-events:none; white-space:nowrap;
+}
+#coords {
+  position:absolute; bottom:10px; left:10px;
+  color:rgba(255,255,255,0.55); font-size:11px; pointer-events:none;
+}
+
+#overlay {
+  position:absolute; inset:0; z-index:30;
+  background:rgba(0,0,0,0.75);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  color:#fff; gap:12px; cursor:pointer;
+}
+#overlay h1 { font-size:28px; letter-spacing:0.06em; }
+#overlay p  { font-size:13px; opacity:0.6; }
+
+#death-screen {
+  position:absolute; inset:0; z-index:35;
+  background:rgba(100,0,0,0.72);
+  display:none; flex-direction:column;
+  align-items:center; justify-content:center;
+  color:#fff; gap:14px;
+}
+#death-screen h2 { font-size:36px; color:#ff5555; text-shadow:0 0 24px #ff0000aa; letter-spacing:0.08em; }
+#death-screen p  { font-size:14px; opacity:0.7; }
+#respawn-btn {
+  padding:11px 32px; background:#b02020; color:#fff; border:2px solid #ff5555;
+  font-family:'Courier New',monospace; font-size:15px; border-radius:4px; cursor:pointer;
+}
+#respawn-btn:hover { background:#d03030; }
+
+#damage-flash {
+  position:absolute; inset:0; pointer-events:none;
+  background:rgba(255,0,0,0); transition:background 0.08s ease; z-index:20;
+}
+#damage-flash.flash { background:rgba(255,0,0,0.38); }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <h1>🏜 NAMIB DESERT SANDBOX</h1>
+  <p>Click to capture mouse and begin</p>
+  <p style="font-size:11px;opacity:0.35">WASD · Mouse · Space · Shift=Sprint · 1–6=Select · Esc=Unlock</p>
+</div>
+
+<div id="death-screen">
+  <h2>YOU DIED</h2>
+  <p>The desert has claimed you.</p>
+  <button id="respawn-btn">↩ Respawn</button>
+</div>
+
+<div id="damage-flash"></div>
+<div id="crosshair"></div>
+
+<div id="controls-hint">
+  <b>Controls</b><br>
+  WASD — Move &nbsp; Shift — Sprint<br>
+  Space — Jump<br>
+  Left click — Break block / Hit animal<br>
+  Right click — Place block<br>
+  1–6 — Select material<br>
+  Esc — Release mouse
+</div>
+
+<div id="statusbars">
+  <div id="hearts"    class="bar-row"></div>
+  <div id="hungerbar" class="bar-row"></div>
+</div>
+
+<div id="sel-label"></div>
+<div id="hotbar"></div>
+<div id="coords"></div>
+
+<script>
+/* ================================================================
+   SCENE & RENDERER
+   ================================================================ */
+const scene = new THREE.Scene()
+scene.background = new THREE.Color(0xd9b87a)
+scene.fog = new THREE.FogExp2(0xe8c87a, 0.009)
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 300)
+
+const renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:'high-performance' })
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5))
+renderer.setSize(innerWidth,innerHeight)
+document.body.appendChild(renderer.domElement)
+
+const sun = new THREE.DirectionalLight(0xfff8e0,1.7)
+sun.position.set(150,250,100)
+scene.add(sun)
+scene.add(new THREE.AmbientLight(0xffd060,0.55))
+
+/* ================================================================
+   BLOCK TYPES
+   ================================================================ */
+const BLOCKS = [
+  { name:'Sand',         color:0xdba75a, hex:'#dba75a' }, // 0
+  { name:'Compact Sand', color:0xbf8c44, hex:'#bf8c44' }, // 1
+  { name:'Steel Sheet',  color:0x8e9aa6, hex:'#8e9aa6' }, // 2
+  { name:'Cow Dung',     color:0x6b4c1e, hex:'#6b4c1e' }, // 3  (sprite, like shrub)
+  { name:'Stone',        color:0x7a7a7a, hex:'#7a7a7a' }, // 4
+  { name:'Shrub',        color:0x4a6128, hex:'#4a6128' }, // 5  (sprite)
+]
+const SHRUB_TYPE = 5
+const DUNG_TYPE  = 3
+
+/* ================================================================
+   INSTANCED WORLD
+   - dummy     : used ONLY for writing matrices (addBlock, removeBlock swap)
+   - readDummy : used ONLY for reading matrices in getHitPos
+   Keeping these separate prevents matrix corruption between a
+   raycast read and a subsequent block write in the same frame.
+   ================================================================ */
+const CAP     = 120000
+const world   = {}
+const instId  = {}
+const instPos = BLOCKS.map(()=>[])
+const iCount  = new Array(BLOCKS.length).fill(0)
+
+const dummy     = new THREE.Object3D()  // WRITE only
+const readDummy = new THREE.Object3D()  // READ  only
+
+const cubeGeo = new THREE.BoxGeometry(1,1,1)
+
+const iMeshes = BLOCKS.map((b, i) => {
+  const mat = new THREE.MeshLambertMaterial({ color: b.color })
+  // Shrub and dung cubes are invisible — sprites handle the visual
+  if (i === SHRUB_TYPE || i === DUNG_TYPE) {
+    mat.transparent = true
+    mat.opacity = 0
+    mat.depthWrite = false
+  }
+  const m = new THREE.InstancedMesh(cubeGeo, mat, CAP)
+  m.count = 0
+  scene.add(m)
+  return m
+})
+
+function addBlock(x,y,z,type) {
+  const key=`${x},${y},${z}`
+  if (world[key]!==undefined) return
+  const idx=iCount[type]
+  dummy.position.set(x,y,z); dummy.updateMatrix()
+  iMeshes[type].setMatrixAt(idx,dummy.matrix)
+  iMeshes[type].instanceMatrix.needsUpdate=true
+  iMeshes[type].count=++iCount[type]
+  world[key]=type; instId[key]=idx; instPos[type][idx]=[x,y,z]
+  if (type===SHRUB_TYPE) addShrubSprite(x,y,z)
+  if (type===DUNG_TYPE)  addDungSprite(x,y,z)
+}
+
+function removeBlock(x,y,z) {
+  const key=`${x},${y},${z}`
+  if (world[key]===undefined) return
+  const type=world[key]
+  const idx=instId[key]
+  const last=--iCount[type]
+  const mesh=iMeshes[type]
+  if (idx!==last) {
+    const [lx,ly,lz]=instPos[type][last]
+    const lk=`${lx},${ly},${lz}`
+    // Use dummy for swap write (readDummy stays untouched)
+    mesh.getMatrixAt(last,dummy.matrix)
+    mesh.setMatrixAt(idx,dummy.matrix)
+    instId[lk]=idx; instPos[type][idx]=[lx,ly,lz]
+  }
+  // Always clear the tail slot so stale coords never get returned
+  instPos[type][last] = null
+  mesh.count=last; mesh.instanceMatrix.needsUpdate=true
+  delete world[key]; delete instId[key]
+  if (type===SHRUB_TYPE) removeShrubSprite(key)
+  if (type===DUNG_TYPE)  removeDungSprite(key)
+}
+
+function isSolid(x,y,z) {
+  return world[`${Math.round(x)},${Math.round(y)},${Math.round(z)}`]!==undefined
+}
+
+/* ================================================================
+   SHRUB SPRITES
+   Each shrub is a THREE.Sprite (billboard) using a canvas texture.
+   The shrub InstancedMesh cube is invisible (opacity 0) and has its
+   raycast method replaced with a no-op so it never intercepts clicks.
+   Shrub hitting is handled separately via ray-sphere test.
+
+   POSITION: sprite centre placed at (block.y + 0.5 + halfSpriteH)
+   so the bottom of the sprite sits flush on the sand surface.
+   ================================================================ */
+const shrubSprites = {}   // "x,y,z" -> THREE.Sprite
+
+// Disable raycasting on shrub mesh entirely — prevents invisible cube
+// from blocking clicks on blocks behind/around shrubs
+iMeshes[SHRUB_TYPE].raycast = () => {}
+iMeshes[DUNG_TYPE].raycast  = () => {}
+
+function makeShrubTexture() {
+  const c = document.createElement('canvas')
+  c.width = 64; c.height = 64
+  const ctx = c.getContext('2d')
+  ctx.clearRect(0,0,64,64)
+
+  // Dried-out desert palette: dusty browns, pale ochres
+  const cols = ['#8a6a30','#7a5820','#9e8040','#6b5018','#b09050','#7c6a38','#5a4818']
+
+  for (let i=0; i<26; i++) {
+    const angle = (i/26)*Math.PI*2
+    const r = 14 + Math.random()*9
+    const cx2 = 32 + Math.cos(angle)*r*0.58
+    const cy2 = 42 - Math.abs(Math.sin(angle))*r*0.85
+    ctx.save()
+    ctx.translate(cx2,cy2)
+    ctx.rotate(angle + Math.PI/2 + (Math.random()-0.5)*0.5)
+    ctx.beginPath()
+    const w = Math.random()<0.4 ? 1.5+Math.random()*1.5 : 2.5+Math.random()*2.5
+    const h = 6+Math.random()*7
+    ctx.ellipse(0,0,w,h,0,0,Math.PI*2)
+    ctx.fillStyle = cols[Math.floor(Math.random()*cols.length)]
+    ctx.globalAlpha = 0.7+Math.random()*0.28
+    ctx.fill()
+    ctx.restore()
+  }
+  // Wispy pale strands at top
+  ctx.globalAlpha = 0.45
+  for (let i=0;i<5;i++){
+    ctx.beginPath()
+    ctx.moveTo(28+Math.random()*8, 34)
+    ctx.lineTo(24+Math.random()*16, 12+Math.random()*10)
+    ctx.strokeStyle='#c8a860'; ctx.lineWidth=0.8; ctx.stroke()
+  }
+  // Woody stems at base
+  ctx.globalAlpha=1
+  for (let i=0;i<4;i++){
+    ctx.fillStyle='#5a3c10'
+    ctx.fillRect(26+i*3, 50, 1.5, 14)
+  }
+  return new THREE.CanvasTexture(c)
+}
+
+const _shrubTex = makeShrubTexture()
+const _shrubMatProto = new THREE.SpriteMaterial({
+  map:_shrubTex, transparent:true, depthWrite:false, alphaTest:0.08
+})
+
+// Half the world-space height of the sprite (scale 0.95 → visual height ~0.9)
+// Centre the sprite so its bottom edge sits on the block's top face
+const SPRITE_SCALE  = 0.95
+const SPRITE_HALF_H = 0.42   // measured from centre to bottom of visible leaves
+
+function addShrubSprite(x,y,z) {
+  const key=`${x},${y},${z}`
+  if (shrubSprites[key]) return
+  const sp = new THREE.Sprite(_shrubMatProto.clone())
+  // The shrub block is at y (invisible). It sits ON top of the sand at y-1.
+  // Visual base = top face of sand block = (y-1) + 0.5 = y - 0.5
+  // Sprite centre = visual base + SPRITE_HALF_H
+  const cy = (y - 0.5) + SPRITE_HALF_H
+  sp.position.set(x, cy, z)
+  sp.scale.set(SPRITE_SCALE, SPRITE_SCALE, 1)
+  sp.userData.baseY  = cy
+  sp.userData.blockY = y
+  sp.userData.phase  = Math.random()*Math.PI*2
+  scene.add(sp)
+  shrubSprites[key] = sp
+}
+
+function removeShrubSprite(key) {
+  const sp = shrubSprites[key]
+  if (!sp) return
+  scene.remove(sp)
+  sp.material.dispose()
+  delete shrubSprites[key]
+}
+
+function animateShrubs(t) {
+  for (const sp of Object.values(shrubSprites)) {
+    const sway = Math.sin(t*0.75 + sp.userData.phase)*0.05
+    sp.scale.set(SPRITE_SCALE + sway, SPRITE_SCALE, 1)
+    sp.position.y = sp.userData.baseY + Math.sin(t*1.0 + sp.userData.phase)*0.008
+  }
+}
+
+/* ================================================================
+   COW DUNG SPRITES
+   Rendered as a flat irregular blob sprite sitting on the sand.
+   Much shorter than the shrub — looks like a pat on the ground.
+   Hit detection uses the same ray-sphere approach as shrubs.
+   ================================================================ */
+const dungSprites = {}
+
+function makeDungTexture() {
+  const c = document.createElement('canvas')
+  c.width = 64; c.height = 32   // wide & flat
+  const ctx = c.getContext('2d')
+  ctx.clearRect(0,0,64,32)
+
+  // Dark mottled brown blob
+  const cols = ['#5a3a10','#6b4c1e','#4a2e0a','#7a5a28','#3d2208']
+  // Main pat shape — irregular ellipse layers
+  for (let i=0; i<18; i++) {
+    const rx = 16+Math.random()*12, ry = 4+Math.random()*5
+    const cx2 = 20+Math.random()*24, cy2 = 10+Math.random()*12
+    ctx.beginPath()
+    ctx.ellipse(cx2,cy2,rx,ry,Math.random()*0.6,0,Math.PI*2)
+    ctx.fillStyle = cols[Math.floor(Math.random()*cols.length)]
+    ctx.globalAlpha = 0.55+Math.random()*0.35
+    ctx.fill()
+  }
+  // Slightly shiny highlight
+  ctx.beginPath()
+  ctx.ellipse(28,10,8,3,0,0,Math.PI*2)
+  ctx.fillStyle = '#a07840'
+  ctx.globalAlpha = 0.25
+  ctx.fill()
+  return new THREE.CanvasTexture(c)
+}
+
+const _dungTex = makeDungTexture()
+const _dungMatProto = new THREE.SpriteMaterial({
+  map:_dungTex, transparent:true, depthWrite:false, alphaTest:0.05
+})
+
+function addDungSprite(x,y,z) {
+  const key=`${x},${y},${z}`
+  if (dungSprites[key]) return
+  const sp = new THREE.Sprite(_dungMatProto.clone())
+  // Flat slab sitting on top of sand block at y-1
+  // Visual sits almost flush with sand: just barely above surface
+  sp.position.set(x, y - 0.5 + 0.08, z)
+  sp.scale.set(0.85, 0.42, 1)   // wide and flat
+  sp.userData.blockY = y
+  scene.add(sp)
+  dungSprites[key] = sp
+}
+
+function removeDungSprite(key) {
+  const sp = dungSprites[key]
+  if (!sp) return
+  scene.remove(sp)
+  sp.material.dispose()
+  delete dungSprites[key]
+}
+
+/* ================================================================
+   CHUNK SYSTEM — infinite world
+   Uses Math.floor for chunk coords so negative positions are handled
+   correctly (JS % gives negative results for negative operands).
+   ================================================================ */
+const CHUNK_SIZE  = 16
+const RENDER_DIST = 5
+const UNLOAD_DIST = 7
+const loadedChunks = new Set()
+
+function duneHeight(x,z) {
+  return Math.floor(
+    Math.sin(x*0.08)*3 + Math.cos(z*0.11)*3 +
+    Math.sin((x+z)*0.05)*2 + Math.cos((x-z)*0.07)*1.5 + 4
+  )
+}
+function pseudoRand(x,z) {
+  const n = Math.sin(x*127.1+z*311.7)*43758.5453
+  return n - Math.floor(n)
+}
+function worldToChunk(wx,wz) {
+  return [Math.floor(wx/CHUNK_SIZE), Math.floor(wz/CHUNK_SIZE)]
+}
+
+function generateChunk(cx,cz) {
+  const key=`${cx},${cz}`
+  if (loadedChunks.has(key)) return
+  loadedChunks.add(key)
+  const ox=cx*CHUNK_SIZE, oz=cz*CHUNK_SIZE
+  for (let lx=0;lx<CHUNK_SIZE;lx++) {
+    for (let lz=0;lz<CHUNK_SIZE;lz++) {
+      const wx=ox+lx, wz=oz+lz
+      const h=duneHeight(wx,wz)
+      for (let y=h-3;y<=h;y++)
+        addBlock(wx,y,wz, y===h?0:(y>=h-2?1:4))
+      // Shrubs: ~0.8% chance
+      if (pseudoRand(wx,wz)<0.008) addBlock(wx,h+1,wz,SHRUB_TYPE)
+      // Cow dung: ~0.4% chance (offset seed, no overlap with shrubs)
+      else if (pseudoRand(wx+999,wz+999)<0.004) addBlock(wx,h+1,wz,DUNG_TYPE)
+    }
+  }
+}
+
+function unloadChunk(cx,cz) {
+  const key=`${cx},${cz}`
+  if (!loadedChunks.has(key)) return
+  loadedChunks.delete(key)
+  const ox=cx*CHUNK_SIZE, oz=cz*CHUNK_SIZE
+  for (let lx=0;lx<CHUNK_SIZE;lx++) {
+    for (let lz=0;lz<CHUNK_SIZE;lz++) {
+      const wx=ox+lx, wz=oz+lz
+      const h=duneHeight(wx,wz)
+      for (let y=h-3;y<=h+1;y++) removeBlock(wx,y,wz)
+    }
+  }
+}
+
+let lastCX=null, lastCZ=null
+function updateChunks(px,pz) {
+  const [pcx,pcz]=worldToChunk(px,pz)
+  if (pcx===lastCX&&pcz===lastCZ) return
+  lastCX=pcx; lastCZ=pcz
+  for (let dx=-RENDER_DIST;dx<=RENDER_DIST;dx++)
+    for (let dz=-RENDER_DIST;dz<=RENDER_DIST;dz++)
+      if (Math.sqrt(dx*dx+dz*dz)<=RENDER_DIST) generateChunk(pcx+dx,pcz+dz)
+  for (const k of [...loadedChunks]) {
+    const [cx,cz]=k.split(',').map(Number)
+    if (Math.sqrt((cx-pcx)**2+(cz-pcz)**2)>UNLOAD_DIST) unloadChunk(cx,cz)
+  }
+}
+
+// Seed initial chunks
+for (let dx=-RENDER_DIST;dx<=RENDER_DIST;dx++)
+  for (let dz=-RENDER_DIST;dz<=RENDER_DIST;dz++)
+    if (Math.sqrt(dx*dx+dz*dz)<=RENDER_DIST) generateChunk(dx,dz)
+
+/* ================================================================
+   GROUND HEIGHT
+   Scans downward from a ceiling above the player's current position.
+   We clamp the scan start to just above player feet so that blocks
+   placed above the player (roof, bridge, etc.) are never mistaken
+   for ground, which was causing the teleport-upward bug.
+   Falls back to formula for unloaded chunks.
+   ================================================================ */
+function groundHeightAt(x,z,currentY) {
+  const gx=Math.round(x), gz=Math.round(z)
+  // Start scan from just below eye level (or default ceiling if no currentY)
+  const scanFrom = currentY !== undefined ? Math.floor(currentY - 0.1) : 30
+  for (let y=scanFrom;y>-8;y--)
+    if (world[`${gx},${y},${gz}`]!==undefined) return y+1
+  return duneHeight(gx,gz)+1
+}
+
+/* ================================================================
+   PLAYER
+   ================================================================ */
+const PLAYER_EYE = 1.62
+const PLAYER_H   = 1.8
+
+const inventory = new Array(BLOCKS.length).fill(0)
+inventory[0]=10; inventory[4]=5
+
+function addToInventory(t,n=1){ inventory[t]=Math.min(inventory[t]+n,999); updateSlotCounts() }
+function hasInventory(t){ return inventory[t]>0 }
+function useInventory(t){
+  if(inventory[t]<=0) return false
+  inventory[t]--; updateSlotCounts(); return true
+}
+function updateSlotCounts(){
+  document.querySelectorAll('.slot-count').forEach((el,i)=>{
+    el.textContent = inventory[i]>0 ? inventory[i] : ''
+  })
+}
+
+const player = {
+  speed:0.10, sprintMul:1.6, jumpVel:0.28,
+  velY:0, onGround:false, fallFromY:null, dead:false
+}
+const spawnX=0, spawnZ=0
+function getSpawnY(){ return groundHeightAt(spawnX,spawnZ)+PLAYER_EYE }
+camera.position.set(spawnX,getSpawnY(),spawnZ)
+
+/* ================================================================
+   SURVIVAL
+   ================================================================ */
+let health=20, hunger=20
+
+function applyDamage(amount){
+  if(player.dead) return
+  health=Math.max(0,health-amount)
+  const fl=document.getElementById('damage-flash')
+  fl.classList.add('flash'); setTimeout(()=>fl.classList.remove('flash'),120)
+  updateBars()
+  if(health<=0) die()
+}
+
+function die(){
+  player.dead=true
+  document.getElementById('death-screen').style.display='flex'
+  if(document.pointerLockElement) document.exitPointerLock()
+}
+
+function respawn(){
+  health=20; hunger=20
+  player.velY=0; player.onGround=false; player.dead=false; player.fallFromY=null
+  camera.position.set(spawnX,getSpawnY(),spawnZ)
+  yaw=0; pitch=0
+  camera.rotation.order='YXZ'; camera.rotation.set(0,0,0)
+  document.getElementById('death-screen').style.display='none'
+  document.body.requestPointerLock()
+  updateBars()
+}
+document.getElementById('respawn-btn').addEventListener('click',respawn)
+
+/* ================================================================
+   POINTER LOCK
+   ================================================================ */
+let yaw=0, pitch=0, locked=false, overlayDismissed=false
+const overlayEl=document.getElementById('overlay')
+
+function requestLock(){ if(!player.dead) document.body.requestPointerLock() }
+overlayEl.addEventListener('click',requestLock)
+renderer.domElement.addEventListener('click',requestLock)
+
+document.addEventListener('pointerlockchange',()=>{
+  locked = document.pointerLockElement===document.body
+  if(locked&&!overlayDismissed){ overlayDismissed=true; overlayEl.style.display='none' }
+})
+
+document.addEventListener('mousemove',e=>{
+  if(!locked||player.dead) return
+  yaw  -=e.movementX*0.002
+  pitch-=e.movementY*0.002
+  pitch=Math.max(-Math.PI/2+0.01,Math.min(Math.PI/2-0.01,pitch))
+  camera.rotation.order='YXZ'
+  camera.rotation.y=yaw; camera.rotation.x=pitch
+})
+
+let hintFaded=false
+document.addEventListener('pointerlockchange',()=>{
+  if(locked&&!hintFaded){
+    hintFaded=true
+    setTimeout(()=>document.getElementById('controls-hint').classList.add('hidden'),8000)
+  }
+})
+
+/* ================================================================
+   KEYBOARD
+   ================================================================ */
+const keys={}
+document.addEventListener('keydown',e=>{
+  keys[e.code]=true
+  const n=parseInt(e.key); if(n>=1&&n<=6) setSlot(n-1)
+  if(e.code==='Escape') document.exitPointerLock()
+})
+document.addEventListener('keyup',e=>{ keys[e.code]=false })
+
+/* ================================================================
+   HOTBAR
+   ================================================================ */
+let selectedSlot=0
+function setSlot(i){
+  selectedSlot=i
+  document.querySelectorAll('.slot').forEach((el,j)=>el.classList.toggle('active',j===i))
+  document.getElementById('sel-label').textContent=BLOCKS[i].name
+}
+const hotbarEl=document.getElementById('hotbar')
+BLOCKS.forEach((b,i)=>{
+  const d=document.createElement('div')
+  d.className='slot'+(i===0?' active':'')
+  d.innerHTML=`<span class="slot-num">${i+1}</span><div class="swatch" style="background:${b.hex}"></div><span class="slot-label">${b.name}</span><span class="slot-count"></span>`
+  d.addEventListener('mousedown',()=>setSlot(i))
+  hotbarEl.appendChild(d)
+})
+setSlot(0); updateSlotCounts()
+
+/* ================================================================
+   PLAYER ARM
+   Short-sleeved dark-toned arm rendered in a separate scene so it
+   is always drawn on top and never clipped by terrain.
+   ================================================================ */
+const SKIN   = 0x5c3a1e   // dark warm brown skin
+const SLEEVE = 0x3a6030   // olive green short sleeve
+
+const armScene  = new THREE.Scene()
+const armCamera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,10)
+armScene.add(new THREE.DirectionalLight(0xfff8e0,1.5))
+armScene.add(new THREE.AmbientLight(0xffd060,0.65))
+
+const armPivot = new THREE.Group()
+
+// Short sleeve cap
+const slv = new THREE.Mesh(
+  new THREE.BoxGeometry(0.36,0.22,0.36),
+  new THREE.MeshLambertMaterial({color:SLEEVE})
+)
+armPivot.add(slv)
+
+// Forearm (skin)
+const far = new THREE.Mesh(
+  new THREE.BoxGeometry(0.28,0.28,0.62),
+  new THREE.MeshLambertMaterial({color:SKIN})
+)
+far.position.set(0,-0.12,-0.38)
+armPivot.add(far)
+
+// Fist
+const fst = new THREE.Mesh(
+  new THREE.BoxGeometry(0.30,0.32,0.30),
+  new THREE.MeshLambertMaterial({color:SKIN})
+)
+fst.position.set(0,-0.12,-0.74)
+armPivot.add(fst)
+
+armPivot.position.set(0.62,-0.45,-0.6)
+armPivot.rotation.set(-0.12,0.22,-0.08)
+armScene.add(armPivot)
+
+let swingT=0, swinging=false, bobT=0
+function triggerSwing(){ swingT=0; swinging=true }
+function updateArm(moving){
+  bobT = moving&&player.onGround ? bobT+0.10 : bobT*0.88
+  const bob=Math.sin(bobT)*0.014
+  let sz=0,sx=0
+  if(swinging){
+    swingT+=0.13
+    const s=Math.sin(swingT*Math.PI); sz=-s*0.20; sx=s*0.07
+    if(swingT>=1) swinging=false
+  }
+  const idle=Math.sin(Date.now()*0.0007)*0.005
+  armPivot.position.set(0.62,-0.45+bob+sx+idle,-0.6+sz)
+  armPivot.rotation.x=-0.12+pitch*0.16
+}
+
+/* ================================================================
+   RAYCASTER
+   Solid blocks (types 0-4) are raycasted normally via iMeshes.
+   Shrubs are detected separately with a ray-sphere test so the
+   invisible shrub cube never blocks clicks on nearby solid blocks.
+   Both hits are compared and the closer one wins.
+   ================================================================ */
+const raycaster = new THREE.Raycaster()
+raycaster.far = 5.5
+
+// Only the solid (non-shrub, non-dung) meshes participate in standard raycasting.
+// We keep iMeshes as the source of truth for indexOf() type lookups.
+const solidMeshes = iMeshes.filter((_,i) => i!==SHRUB_TYPE && i!==DUNG_TYPE)
+
+document.addEventListener('mousedown',e=>{
+  if(!locked||player.dead) return
+  if(e.button===0){
+    triggerSwing()
+    if(!tryHitAnimal()) tryBreak()
+  }
+  if(e.button===2){ tryPlace(); triggerSwing() }
+})
+document.addEventListener('contextmenu',e=>e.preventDefault())
+
+function getSolidHit(){
+  raycaster.setFromCamera({x:0,y:0},camera)
+  return raycaster.intersectObjects(solidMeshes)[0]||null
+}
+
+// Ray-sphere intersection against a map of sprites (shrubs or dung)
+function getSpriteHit(spriteMap, radius) {
+  raycaster.setFromCamera({x:0,y:0},camera)
+  const origin = raycaster.ray.origin
+  const dir    = raycaster.ray.direction
+  const REACH  = 5.5
+  const R      = radius
+
+  let best=null, bestDist=REACH
+
+  for (const [key,sp] of Object.entries(spriteMap)){
+    const ocx = sp.position.x - origin.x
+    const ocy = sp.position.y - origin.y
+    const ocz = sp.position.z - origin.z
+    const tca = ocx*dir.x + ocy*dir.y + ocz*dir.z
+    if (tca<0) continue
+    const d2 = (ocx*ocx+ocy*ocy+ocz*ocz) - tca*tca
+    if (d2>R*R) continue
+    const dist = tca - Math.sqrt(R*R - d2)
+    if (dist<bestDist){
+      bestDist=dist
+      best={x:Math.round(sp.position.x), y:sp.userData.blockY, z:Math.round(sp.position.z), dist}
+    }
+  }
+  return best
+}
+
+function getSolidHitPos(hit){
+  // Look up exact integer coords from instPos — avoids float precision
+  // loss at large world coordinates. Guard against null (stale removed slots).
+  const type = iMeshes.indexOf(hit.object)
+  const pos  = instPos[type][hit.instanceId]
+  if (pos) return [pos[0], pos[1], pos[2]]
+  // Fallback: matrix decompose
+  hit.object.getMatrixAt(hit.instanceId,readDummy.matrix)
+  readDummy.matrix.decompose(readDummy.position,readDummy.quaternion,readDummy.scale)
+  return [
+    Math.round(readDummy.position.x),
+    Math.round(readDummy.position.y),
+    Math.round(readDummy.position.z)
+  ]
+}
+
+function tryBreak(){
+  const sh = getSolidHit()
+  const sw = getSpriteHit(shrubSprites, 0.55)
+  const sd = getSpriteHit(dungSprites,  0.45)
+
+  // Pick closest of solid, shrub, dung
+  let best=null
+  if (sh) best={x:0,y:0,z:0,dist:sh.distance,hit:sh,isSolid:true}
+  if (sw && (!best||sw.dist<best.dist)) best={x:sw.x,y:sw.y,z:sw.z,dist:sw.dist,isSolid:false}
+  if (sd && (!best||sd.dist<best.dist)) best={x:sd.x,y:sd.y,z:sd.z,dist:sd.dist,isSolid:false}
+  if (!best) return
+
+  let bx,by,bz
+  if (best.isSolid){ [bx,by,bz]=getSolidHitPos(sh) }
+  else { bx=best.x; by=best.y; bz=best.z }
+
+  const type=world[`${bx},${by},${bz}`]
+  if(type===undefined) return
+  removeBlock(bx,by,bz)
+  addToInventory(type)
+}
+
+function tryPlace(){
+  const hit=getSolidHit(); if(!hit) return
+  if(!hasInventory(selectedSlot)){
+    const slots=document.querySelectorAll('.slot')
+    slots[selectedSlot].style.borderColor='#ff4444'
+    setTimeout(()=>slots[selectedSlot].style.borderColor='',300)
+    return
+  }
+  const [x,y,z]=getSolidHitPos(hit)
+  const n=hit.face.normal
+  const nx=x+Math.round(n.x),ny=y+Math.round(n.y),nz=z+Math.round(n.z)
+  const px=Math.round(camera.position.x),pz=Math.round(camera.position.z)
+  const eyeY=camera.position.y,feetY=eyeY-PLAYER_EYE
+  if(nx===px&&nz===pz&&ny>=Math.floor(feetY)&&ny<=Math.ceil(eyeY)) return
+  addBlock(nx,ny,nz,selectedSlot)
+  useInventory(selectedSlot)
+}
+
+/* ================================================================
+   MOVEMENT & PHYSICS
+   ================================================================ */
+function canStandAt(wx,wz){
+  // For prospective positions, scan from a fixed high ceiling.
+  // We want the ground at the new position, not relative to current Y.
+  const gy=groundHeightAt(wx,wz,undefined)-1
+  return !isSolid(Math.round(wx),gy+1,Math.round(wz)) &&
+         !isSolid(Math.round(wx),gy+2,Math.round(wz))
+}
+
+function move(){
+  if(player.dead) return
+  const sprint=keys['ShiftLeft']||keys['ShiftRight']
+  const speed=player.speed*(sprint?player.sprintMul:1)
+
+  let fx=0,fz=0
+  if(keys['KeyW']){fx-=Math.sin(yaw);fz-=Math.cos(yaw)}
+  if(keys['KeyS']){fx+=Math.sin(yaw);fz+=Math.cos(yaw)}
+  if(keys['KeyA']){fx-=Math.cos(yaw);fz+=Math.sin(yaw)}
+  if(keys['KeyD']){fx+=Math.cos(yaw);fz-=Math.sin(yaw)}
+
+  const moving=fx!==0||fz!==0
+  const len=Math.sqrt(fx*fx+fz*fz)
+  if(len>0){fx/=len;fz/=len}
+
+  const cx=camera.position.x,cz=camera.position.z,ey=camera.position.y
+
+  const nx2=cx+fx*speed
+  if(canStandAt(nx2,cz)&&!isSolid(nx2,ey-0.05,cz)&&!isSolid(nx2,ey-PLAYER_EYE+0.1,cz))
+    camera.position.x=nx2
+
+  const nz2=cz+fz*speed
+  if(canStandAt(cx,nz2)&&!isSolid(cx,ey-0.05,nz2)&&!isSolid(cx,ey-PLAYER_EYE+0.1,nz2))
+    camera.position.z=nz2
+
+  player.velY=Math.max(player.velY-0.026,-0.85)
+  camera.position.y+=player.velY
+
+  const groundY=groundHeightAt(camera.position.x,camera.position.z,camera.position.y)
+  const feetY=groundY+PLAYER_EYE
+
+  if(camera.position.y<=feetY){
+    if(!player.onGround&&player.velY<-0.1&&player.fallFromY!==null){
+      const drop=player.fallFromY-(camera.position.y-PLAYER_EYE)
+      if(drop>6) applyDamage(Math.floor(drop-6))
+    }
+    camera.position.y=feetY
+    if(player.velY<0) player.velY=0
+    player.onGround=true; player.fallFromY=null
+  } else {
+    if(camera.position.y>feetY+0.08){
+      player.onGround=false
+      const cf=camera.position.y-PLAYER_EYE
+      if(player.fallFromY===null||cf>player.fallFromY) player.fallFromY=cf
+    }
+  }
+
+  if(player.velY>0&&isSolid(camera.position.x,camera.position.y+0.05,camera.position.z))
+    player.velY=0
+  if(keys['Space']&&player.onGround){ player.velY=player.jumpVel; player.onGround=false }
+
+  updateArm(moving)
+  updateChunks(camera.position.x,camera.position.z)
+  document.getElementById('coords').textContent=
+    `X ${Math.round(camera.position.x)}  Y ${Math.round(camera.position.y-PLAYER_EYE)}  Z ${Math.round(camera.position.z)}`
+}
+
+/* ================================================================
+   SURVIVAL BARS
+   ================================================================ */
+function drumSVG(full){
+  const m=full?'#c0702a':'#222',s=full?'rgba(240,150,90,0.5)':'none',b=full?'#d4b896':'#181818'
+  return `<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="11.5" cy="7.5" rx="5.5" ry="5" fill="${m}"/>
+    <ellipse cx="10" cy="6" rx="2" ry="1.4" fill="${s}"/>
+    <rect x="3" y="10" width="3.2" height="5.5" rx="1.5" fill="${b}"/>
+    <circle cx="4.6" cy="10" r="2.4" fill="${b}"/>
+    <circle cx="4.6" cy="15.5" r="1.9" fill="${b}"/>
+  </svg>`
+}
+function updateBars(){
+  let h='',f=''
+  for(let i=0;i<10;i++) h+=`<span class="heart-pip">${i<health/2?'❤️':'🖤'}</span>`
+  for(let i=0;i<10;i++) f+=`<span class="drum-pip">${drumSVG(i<hunger/2)}</span>`
+  document.getElementById('hearts').innerHTML=h
+  document.getElementById('hungerbar').innerHTML=f
+}
+updateBars()
+setInterval(()=>{
+  if(player.dead) return
+  hunger=Math.max(0,hunger-1)
+  if(hunger===0&&health>1) health-=1
+  updateBars(); if(health<=0) die()
+},3000)
+
+/* ================================================================
+   NAMIBIAN ANIMALS
+   Three species: Oryx, Springbok, Ostrich.
+   Each is a simple Three.js mesh group. They wander the world,
+   can be punched (left-click when crosshair is on them), and drop
+   meat that restores hunger when "broken" like a block.
+
+   Hit detection: ray-sphere against animal bounding sphere.
+   Each animal has HP. On death it drops a meat pickup that
+   restores hunger when the player walks over it.
+   ================================================================ */
+const ANIMAL_DEFS = [
+  { name:'Oryx',      hp:3, hunger:6, speed:0.022, color:0xc8a87a, legCol:0x8a6040, scale:[0.55,0.40,1.0], eyeH:0.75 },
+  { name:'Springbok', hp:2, hunger:4, speed:0.032, color:0xd4a060, legCol:0x7a5030, scale:[0.38,0.30,0.70], eyeH:0.55 },
+  { name:'Ostrich',   hp:2, hunger:5, speed:0.038, color:0x2a2a2a, legCol:0xc8a060, scale:[0.30,0.60,0.30], eyeH:1.05 },
+]
+const ANIMAL_COUNT = 12   // total animals in world at once
+const animals = []
+
+function makeAnimalMesh(def) {
+  const g = new THREE.Group()
+
+  if (def.name === 'Ostrich') {
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.40,0.28), new THREE.MeshLambertMaterial({color:0x1a1a1a}))
+    body.position.y = 0.55
+    g.add(body)
+    // Long white neck
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.10,0.50,0.10), new THREE.MeshLambertMaterial({color:0xeeeeee}))
+    neck.position.set(0,0.94,0.10)
+    g.add(neck)
+    // Small head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,0.18), new THREE.MeshLambertMaterial({color:0x1a1a1a}))
+    head.position.set(0,1.20,0.16)
+    g.add(head)
+    // Legs
+    for (const lx of [-0.07,0.07]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.48,0.06), new THREE.MeshLambertMaterial({color:def.legCol}))
+      leg.position.set(lx,0.24,0)
+      g.add(leg)
+    }
+  } else {
+    // Generic quadruped (Oryx / Springbok)
+    const [sw,sh,sl] = def.scale
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(sw,sh,sl), new THREE.MeshLambertMaterial({color:def.color}))
+    body.position.y = def.eyeH*0.62
+    g.add(body)
+    // Head
+    const hSz = sh*0.55
+    const head = new THREE.Mesh(new THREE.BoxGeometry(hSz,hSz,hSz*0.9), new THREE.MeshLambertMaterial({color:def.color}))
+    head.position.set(0, def.eyeH*0.62+sh*0.30, sl*0.50)
+    g.add(head)
+    // Horns for oryx
+    if (def.name==='Oryx') {
+      for (const hx of [-0.08,0.08]) {
+        const horn = new THREE.Mesh(new THREE.BoxGeometry(0.04,0.30,0.04), new THREE.MeshLambertMaterial({color:0x4a3010}))
+        horn.position.set(hx, def.eyeH*0.62+sh*0.55+0.18, sl*0.46)
+        g.add(horn)
+      }
+    }
+    // Legs
+    const legH = def.eyeH*0.55
+    const legW = sw*0.16
+    for (const lx of [-sw*0.30, sw*0.30]) {
+      for (const lz of [-sl*0.32, sl*0.32]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(legW,legH,legW), new THREE.MeshLambertMaterial({color:def.legCol}))
+        leg.position.set(lx, legH/2, lz)
+        g.add(leg)
+      }
+    }
+  }
+  return g
+}
+
+// Meat pickup sprite
+const meatPickups = []
+function makeMeatSprite(x,y,z,restoreAmount) {
+  const c = document.createElement('canvas'); c.width=32; c.height=32
+  const ctx=c.getContext('2d')
+  ctx.clearRect(0,0,32,32)
+  ctx.fillStyle='#c03020'; ctx.beginPath(); ctx.ellipse(16,18,10,8,0,0,Math.PI*2); ctx.fill()
+  ctx.fillStyle='#e04030'; ctx.beginPath(); ctx.ellipse(14,15,5,4,0,0,Math.PI*2); ctx.fill()
+  ctx.fillStyle='#8a5040'; ctx.fillRect(14,10,4,10); // bone handle
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,alphaTest:0.1}))
+  sp.position.set(x,y+0.4,z)
+  sp.scale.set(0.4,0.4,1)
+  sp.userData = {restoreAmount, bobPhase:Math.random()*Math.PI*2}
+  scene.add(sp)
+  meatPickups.push(sp)
+}
+
+function spawnAnimal(defIdx, x, z) {
+  const def = ANIMAL_DEFS[defIdx]
+  const mesh = makeAnimalMesh(def)
+  const groundY = groundHeightAt(x,z,undefined)
+  mesh.position.set(x, groundY-1, z)
+  scene.add(mesh)
+  const an = {
+    mesh, def,
+    hp: def.hp,
+    x, z,
+    velX: (Math.random()-0.5)*def.speed,
+    velZ: (Math.random()-0.5)*def.speed,
+    wanderTimer: Math.random()*120,
+    dead: false,
+    radius: 0.55,
+    legT: 0,
+    fleeing: false,
+    fleeTimer: 0,
+  }
+  animals.push(an)
+}
+
+// Spawn initial animals spread around spawn
+for (let i=0;i<ANIMAL_COUNT;i++) {
+  const angle = Math.random()*Math.PI*2
+  const dist  = 8+Math.random()*40
+  const x = Math.round(Math.cos(angle)*dist)
+  const z = Math.round(Math.sin(angle)*dist)
+  const defIdx = Math.floor(Math.random()*ANIMAL_DEFS.length)
+  spawnAnimal(defIdx, x, z)
+}
+
+function updateAnimals(dt) {
+  const px=camera.position.x, pz=camera.position.z, py=camera.position.y
+
+  for (let i=animals.length-1;i>=0;i--) {
+    const an = animals[i]
+    if (an.dead) continue
+
+    // Flee if player within 5 blocks
+    const dx=an.x-px, dz=an.z-pz
+    const distSq=dx*dx+dz*dz
+    if (distSq<25) {
+      an.fleeing=true; an.fleeTimer=80
+      const len=Math.sqrt(distSq)||1
+      an.velX=(dx/len)*an.def.speed*1.8
+      an.velZ=(dz/len)*an.def.speed*1.8
+    }
+    if (an.fleeTimer>0) an.fleeTimer--
+    else an.fleeing=false
+
+    // Wander — change direction every so often
+    an.wanderTimer--
+    if (an.wanderTimer<=0&&!an.fleeing) {
+      an.wanderTimer=60+Math.random()*120
+      an.velX=(Math.random()-0.5)*an.def.speed
+      an.velZ=(Math.random()-0.5)*an.def.speed
+    }
+
+    // Move
+    const nx=an.x+an.velX, nz=an.z+an.velZ
+    const gY=groundHeightAt(nx,nz,undefined)
+    an.x=nx; an.z=nz
+    an.mesh.position.set(an.x, gY-1, an.z)
+
+    // Face direction of travel
+    if (Math.abs(an.velX)+Math.abs(an.velZ)>0.001)
+      an.mesh.rotation.y = Math.atan2(an.velX,an.velZ)
+
+    // Leg bob animation
+    an.legT += (Math.abs(an.velX)+Math.abs(an.velZ))*18
+    an.mesh.children.forEach((child,ci)=>{
+      // Animate leg pairs (children 3+ are legs for quadrupeds)
+      if (ci>=3) child.position.y += Math.sin(an.legT+(ci%2)*Math.PI)*0.01-Math.sin(an.legT+(ci%2)*Math.PI-0.01)*0.01
+    })
+
+    // Keep animals in loaded chunk range
+    const [acx,acz]=worldToChunk(an.x,an.z)
+    if (Math.sqrt((acx-lastCX)**2+(acz-lastCZ)**2)>RENDER_DIST) {
+      // Teleport back toward player
+      const ang=Math.random()*Math.PI*2
+      an.x=px+Math.cos(ang)*12; an.z=pz+Math.sin(ang)*12
+      an.velX=(Math.random()-0.5)*an.def.speed
+      an.velZ=(Math.random()-0.5)*an.def.speed
+    }
+  }
+
+  // Meat pickups: bob and check if player walks over
+  for (let i=meatPickups.length-1;i>=0;i--) {
+    const mp=meatPickups[i]
+    mp.position.y += Math.sin(Date.now()*0.003+mp.userData.bobPhase)*0.002
+    const mdx=mp.position.x-px, mdz=mp.position.z-pz, mdy=mp.position.y-py
+    if (mdx*mdx+mdy*mdy+mdz*mdz<1.2) {
+      hunger=Math.min(20,hunger+mp.userData.restoreAmount)
+      updateBars()
+      scene.remove(mp); mp.material.dispose()
+      meatPickups.splice(i,1)
+    }
+  }
+}
+
+// Check if crosshair is pointing at an animal — called on left-click
+function tryHitAnimal() {
+  raycaster.setFromCamera({x:0,y:0},camera)
+  const origin=raycaster.ray.origin, dir=raycaster.ray.direction
+  const REACH=4.5, R=0.7
+  let best=null, bestDist=REACH
+
+  for (const an of animals) {
+    if (an.dead) continue
+    const ocx=an.mesh.position.x-origin.x
+    const ocy=an.mesh.position.y+0.5-origin.y
+    const ocz=an.mesh.position.z-origin.z
+    const tca=ocx*dir.x+ocy*dir.y+ocz*dir.z
+    if (tca<0) continue
+    const d2=(ocx*ocx+ocy*ocy+ocz*ocz)-tca*tca
+    if (d2>R*R) continue
+    const dist=tca-Math.sqrt(R*R-d2)
+    if (dist<bestDist){ bestDist=dist; best=an }
+  }
+
+  if (!best) return false
+
+  best.hp--
+  // Flash red
+  best.mesh.children.forEach(c=>{ if(c.material) { c.material.emissive=new THREE.Color(0xff0000); setTimeout(()=>{ if(c.material) c.material.emissive=new THREE.Color(0) },120) }})
+
+  if (best.hp<=0) {
+    // Die — drop meat
+    const mx=best.mesh.position.x, mz=best.mesh.position.z
+    const mgy=groundHeightAt(mx,mz,undefined)
+    makeMeatSprite(mx,mgy-1,mz,best.def.hunger)
+    scene.remove(best.mesh)
+    best.dead=true
+  } else {
+    // Flee at full speed
+    best.fleeing=true; best.fleeTimer=200
+    const dx=best.x-px, dz=best.z-pz
+    const len=Math.sqrt(dx*dx+dz*dz)||1
+    best.velX=(dx/len)*best.def.speed*2.2
+    best.velZ=(dz/len)*best.def.speed*2.2
+  }
+  return true
+}
+const SKY={
+  day:new THREE.Color(0xd9b87a), dusk:new THREE.Color(0xb05a28),
+  night:new THREE.Color(0x0a0e1a), dawn:new THREE.Color(0xe07030)
+}
+const DAY_DUR=5*60*1000; let dayT=0.25
+function updateDayCycle(dt){
+  dayT=(dayT+dt/DAY_DUR)%1
+  let sky
+  if(dayT<0.25)      sky=SKY.dawn.clone().lerp(SKY.day,dayT/0.25)
+  else if(dayT<0.50) sky=SKY.day.clone().lerp(SKY.dusk,(dayT-0.25)/0.25)
+  else if(dayT<0.75) sky=SKY.dusk.clone().lerp(SKY.night,(dayT-0.50)/0.25)
+  else               sky=SKY.night.clone().lerp(SKY.dawn,(dayT-0.75)/0.25)
+  scene.background=sky; scene.fog.color=sky
+  sun.intensity=Math.max(0.1,Math.sin(dayT*Math.PI*2)*0.9+0.8)
+}
+
+/* ================================================================
+   RESIZE
+   ================================================================ */
+window.addEventListener('resize',()=>{
+  camera.aspect=armCamera.aspect=innerWidth/innerHeight
+  camera.updateProjectionMatrix(); armCamera.updateProjectionMatrix()
+  renderer.setSize(innerWidth,innerHeight)
+})
+
+/* ================================================================
+   RENDER LOOP
+   ================================================================ */
+let lastTime=performance.now()
+function animate(){
+  requestAnimationFrame(animate)
+  const now=performance.now(),dt=now-lastTime; lastTime=now
+  move()
+  animateShrubs(now*0.001)
+  updateAnimals(dt)
+  updateDayCycle(dt)
+  renderer.render(scene,camera)
+  renderer.autoClear=false
+  renderer.clearDepth()
+  renderer.render(armScene,armCamera)
+  renderer.autoClear=true
+}
+animate()
+</script>
+</body>
+</html>

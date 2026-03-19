@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JEW</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Press Start 2P', monospace;
+    color: #0000ff;
+    overflow: hidden;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    letter-spacing: 4px;
+    margin-bottom: 16px;
+    color: #0000ff;
+  }
+
+  .hud {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 12px;
+    font-size: 0.55rem;
+    color: #0000ff;
+    letter-spacing: 2px;
+  }
+
+  .hud span { color: #0000ff; }
+
+  #gameWrap {
+    position: relative;
+    width: 484px;  /* 480px canvas + 2px border each side */
+    height: 484px;
+    line-height: 0;
+  }
+
+  #gameCanvas {
+    border: 2px solid #0000ff;
+    display: block;
+    background: #ffffff;
+    box-shadow: 0 0 0 1px #0000ff;
+  }
+
+  /*
+    The friend's face lives here as a real <img>.
+    No canvas = no CORS = image always shows.
+    We position it absolutely over the canvas cell by cell.
+  */
+  #headImg {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    pointer-events: none;
+    display: none;
+    transform-origin: center center;
+  }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    pointer-events: none;
+  }
+
+  .overlay-title {
+    font-size: 1.8rem;
+    letter-spacing: 6px;
+    text-align: center;
+    line-height: 1.6;
+    color: #0000ff;
+  }
+
+  .overlay-sub {
+    font-size: 0.55rem;
+    color: #0000ff;
+    letter-spacing: 3px;
+    text-align: center;
+    line-height: 2;
+  }
+
+  .blink { animation: blink 1s step-end infinite; }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  .hint {
+    margin-top: 6px;
+    font-size: 0.45rem;
+    color: #5555ff;
+    letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🇮🇱 JEW</h1>
+<div class="hud">
+  SCORE: <span id="scoreDisplay">0</span> &nbsp;&nbsp; HIGH: <span id="highDisplay">0</span>
+</div>
+
+<div id="gameWrap">
+  <canvas id="gameCanvas" width="480" height="480"></canvas>
+
+  <!--
+    Plain <img> tag — the browser renders this normally with no canvas CORS rules.
+    JavaScript moves it to wherever the snake's head is each tick.
+  -->
+  <div id="overlay">
+    <div class="overlay-title" id="overlayTitle">🇮🇱 JEW</div>
+    <div class="overlay-sub"   id="overlaySub">PRESS <span style="color:#fff">SPACE</span> OR<br>ARROW KEY TO START</div>
+    <div class="hint"          id="overlayHint">WASD OR ARROW KEYS TO MOVE</div>
+  </div>
+</div>
+
+<script>
+const canvas  = document.getElementById('gameCanvas');
+const ctx     = canvas.getContext('2d');
+const overlay      = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlaySub   = document.getElementById('overlaySub');
+const overlayHint  = document.getElementById('overlayHint');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const highDisplay  = document.getElementById('highDisplay');
+
+const GRID = 20;
+const CELL = canvas.width / GRID; // 24px
+
+// canvas has a 2px border — the img needs that offset so it lines up
+const BORDER = 2;
+
+let snake, dir, nextDir, food, score, highScore = 0, state = 'idle', tickTimer;
+const TICK_START = 130;
+const TICK_MIN   = 60;
+let tickRate = TICK_START;
+
+// ── Coin drawn to an offscreen canvas (no external image = no CORS) ─
+const coinC   = document.createElement('canvas');
+coinC.width   = CELL;
+coinC.height  = CELL;
+const coinCtx = coinC.getContext('2d');
+
+(function buildCoin() {
+  const cx = CELL/2, cy = CELL/2, r = CELL * 0.42;
+  const g = coinCtx.createRadialGradient(cx-r*.3, cy-r*.3, r*.05, cx, cy, r);
+  g.addColorStop(0,   '#fff8a0');
+  g.addColorStop(0.3, '#ffd700');
+  g.addColorStop(0.7, '#c8940a');
+  g.addColorStop(1,   '#7a5800');
+  coinCtx.beginPath(); coinCtx.arc(cx, cy, r, 0, Math.PI*2);
+  coinCtx.fillStyle = g; coinCtx.fill();
+  coinCtx.strokeStyle = '#a07000'; coinCtx.lineWidth = 1.5;
+  coinCtx.beginPath(); coinCtx.arc(cx, cy, r, 0, Math.PI*2); coinCtx.stroke();
+  coinCtx.strokeStyle = 'rgba(255,220,50,0.5)'; coinCtx.lineWidth = 1;
+  coinCtx.beginPath(); coinCtx.arc(cx, cy, r*.72, 0, Math.PI*2); coinCtx.stroke();
+  coinCtx.font = `bold ${CELL*.46}px serif`;
+  coinCtx.textAlign = 'center'; coinCtx.textBaseline = 'middle';
+  coinCtx.fillStyle = '#a07000'; coinCtx.fillText('$', cx+.5, cy+.5);
+  coinCtx.fillStyle = '#ffe066'; coinCtx.fillText('$', cx, cy);
+})();
+
+// ── Face image pool — one <img> per snake segment ───────────────────
+// We reuse a pool so we're not creating/destroying DOM nodes every tick
+const facePool = [];
+const gameWrap = document.getElementById('gameWrap');
+const IMG_SRC  = 'https://e7.pngegg.com/pngimages/927/177/png-clipart-jewish-people-judaism-cartoon-illustration-hat-glasses-jews-glass-wine-glass.png';
+
+function getFaceImg() {
+  // Grab a hidden one from the pool, or create a new one
+  let img = facePool.find(i => i.style.display === 'none');
+  if (!img) {
+    img = document.createElement('img');
+    img.src = IMG_SRC;
+    img.style.cssText = `position:absolute;width:${CELL}px;height:${CELL}px;object-fit:cover;pointer-events:none;display:none;transform-origin:center center;`;
+    gameWrap.appendChild(img);
+    facePool.push(img);
+  }
+  return img;
+}
+
+function updateAllSegments() {
+  // Hide all pooled imgs first
+  facePool.forEach(i => i.style.display = 'none');
+
+  if (state !== 'running') return;
+
+  snake.forEach((seg, idx) => {
+    const img = getFaceImg();
+    // Head rotates to face direction; body segments all face the same direction
+    const angleDeg = Math.atan2(dir.y, dir.x) * 180 / Math.PI - 90;
+    img.style.display   = 'block';
+    img.style.left      = (BORDER + seg.x * CELL) + 'px';
+    img.style.top       = (BORDER + seg.y * CELL) + 'px';
+    img.style.transform = `rotate(${angleDeg}deg)`;
+    // Slightly smaller for body segments so you can see the gaps
+    const scale = idx === 0 ? 1 : 0.85;
+    img.style.transform = `rotate(${angleDeg}deg) scale(${scale})`;
+  });
+}
+
+// ── Game logic ──────────────────────────────────────────────────────
+function initGame() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10},{x:7,y:10}];
+  dir = nextDir = {x:1, y:0};
+  score = 0;
+  tickRate = TICK_START;
+  scoreDisplay.textContent = 0;
+  placeFood();
+}
+
+function placeFood() {
+  let pos;
+  do { pos = {x: Math.floor(Math.random()*GRID), y: Math.floor(Math.random()*GRID)}; }
+  while (snake.some(s => s.x===pos.x && s.y===pos.y));
+  food = pos;
+}
+
+function tick() {
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+  if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) { gameOver(); return; }
+  if (snake.some(s => s.x===head.x && s.y===head.y))                 { gameOver(); return; }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    scoreDisplay.textContent = score;
+    if (score > highScore) { highScore = score; highDisplay.textContent = highScore; }
+    tickRate = Math.max(TICK_MIN, TICK_START - score * 3);
+    placeFood();
+  } else {
+    snake.pop();
+  }
+
+  draw();
+  updateAllSegments();
+  tickTimer = setTimeout(tick, tickRate);
+}
+
+function gameOver() {
+  state = 'dead';
+  clearTimeout(tickTimer);
+  updateAllSegments(); // hides all face imgs
+  draw();
+  overlayTitle.innerHTML  = 'GAME<br>OVER';
+  overlaySub.innerHTML    = `SCORE: <span style="color:#fff">${score}</span><br><br><span class="blink">PRESS SPACE TO RETRY</span>`;
+  overlayHint.textContent = '';
+  overlay.style.display   = 'flex';
+}
+
+function startGame() {
+  overlay.style.display = 'none';
+  state = 'running';
+  initGame();
+  clearTimeout(tickTimer);
+  tick();
+}
+
+// ── Draw — canvas only handles body + coin; head is the <img> ───────
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Grid - light blue lines
+  ctx.strokeStyle = '#ccccff';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= GRID; i++) {
+    ctx.beginPath(); ctx.moveTo(i*CELL,0); ctx.lineTo(i*CELL,canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i*CELL); ctx.lineTo(canvas.width,i*CELL); ctx.stroke();
+  }
+
+  // Every body segment gets a face image via absolutely positioned imgs
+  // (handled by updateAllSegments, not drawn on canvas)
+
+  // Coin
+  ctx.drawImage(coinC, food.x*CELL, food.y*CELL);
+
+  // Sparkle on the coin
+  const t = Date.now() / 600;
+  [{dx:.75,dy:.15},{dx:.15,dy:.75},{dx:.85,dy:.75}].forEach((sp,i) => {
+    ctx.globalAlpha = Math.abs(Math.sin(t + i*1.2)) * 0.8;
+    ctx.fillStyle = '#fff8c0';
+    ctx.beginPath();
+    ctx.arc(food.x*CELL+sp.dx*CELL, food.y*CELL+sp.dy*CELL, 1.2, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+// Idle animation
+function idleDraw() {
+  if (state !== 'idle') return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='#ccccff'; ctx.lineWidth=0.5;
+  for (let i=0;i<=GRID;i++){
+    ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,canvas.height);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(canvas.width,i*CELL);ctx.stroke();
+  }
+  requestAnimationFrame(idleDraw);
+}
+idleDraw();
+
+// ── Input ────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (state==='idle'||state==='dead') {
+    if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD'].includes(e.code)) {
+      e.preventDefault(); startGame(); return;
+    }
+  }
+  if (state!=='running') return;
+  e.preventDefault();
+  const moves = {
+    ArrowUp:{x:0,y:-1},KeyW:{x:0,y:-1},
+    ArrowDown:{x:0,y:1},KeyS:{x:0,y:1},
+    ArrowLeft:{x:-1,y:0},KeyA:{x:-1,y:0},
+    ArrowRight:{x:1,y:0},KeyD:{x:1,y:0},
+  };
+  const m = moves[e.code];
+  if (m && !(m.x===-dir.x && m.y===-dir.y)) nextDir = m;
+});
+
+// Start
+state = 'idle';
+overlay.style.display = 'flex';
+</script>
+</body>
+</html>

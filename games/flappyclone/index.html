@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Habibi Atta's Birthday Flight</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1 id="birthday-header">Habibi Atta's 9/11 Flight Challenge!</h1>
+    
+    <div id="game-container">
+        <div id="bird"></div> 
+        
+        <div id="score">0</div>
+        <div id="start-message">Press SPACE to Start and Flap!</div>
+        
+        <div id="high-score-board">
+            <h3>&#9733; Top Scores &#9733;</h3>
+            <ul id="high-score-list">
+                </ul>
+            <button onclick="dismissScoreboard()">Start Flight</button> 
+        </div>
+        
+        <div id="game-over">
+            Game Over!
+            <p>Score: <span id="final-score">0</span></p>
+            <button onclick="window.location.reload()">Fly Again</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
