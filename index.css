@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
 :root {
-    --primary: #ff007a;
-    --secondary: #00d4ff;
+    --primary: #F45D01;
+    --secondary: #222;
     --accent: #ffea00;
-    --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    --bg-color: #fef2d3;
 }
 
 * {
@@ -14,63 +14,71 @@
 }
 
 body {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Press Start 2P', cursive;
     min-height: 100vh;
-    background: var(--bg-gradient);
-    background-attachment: fixed;
-    color: #fff;
+    background: url('assets/bg.png') center/cover no-repeat fixed;
+    color: var(--secondary);
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 2rem;
     overflow-x: hidden;
+    line-height: 1.5;
+}
+
+.page-wrapper {
+    width: 100%;
+    min-height: 100vh;
+    background: rgba(254, 242, 211, 0.60);
+    /* Slight background with opacity */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4rem 2rem;
 }
 
 .hero {
     text-align: center;
-    margin-bottom: 4rem;
+    margin-bottom: 1rem;
     z-index: 10;
 }
 
 .hero h1 {
-    font-size: 6rem;
+    font-size: 3.5rem;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: -2px;
-    background: linear-gradient(to right, var(--accent), var(--primary), var(--secondary));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.5));
-    margin-bottom: 0.5rem;
-    line-height: 1;
+    color: var(--primary);
+    filter: drop-shadow(5px 5px 0px rgba(0, 0, 0, 0.15));
+    margin-bottom: 1rem;
+    line-height: 1.2;
 }
 
 .hero p {
-    font-size: 1.5rem;
-    opacity: 0.9;
+    font-size: 1rem;
     font-weight: 500;
     color: var(--secondary);
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    text-shadow: none;
 }
 
 .gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 3rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    /* Increase gap for 2x2 layout */
     width: 100%;
-    max-width: 1200px;
+    max-width: 700px;
+    /* Narrower to look better as 2x2 */
     z-index: 10;
 }
 
 .card {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 40px;
-    padding: 3rem 2rem;
+    background: #fff;
+    border: 4px solid var(--secondary);
+    border-radius: 0;
+    aspect-ratio: 1/1;
+    padding: 2rem 1rem;
     text-align: center;
-    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: all 0.2s steps(4);
     cursor: pointer;
     text-decoration: none;
     color: inherit;
@@ -80,13 +88,14 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.1);
 }
 
 .card:hover {
-    transform: translateY(-20px) scale(1.05);
-    background: rgba(255, 255, 255, 0.1);
-    border-color: var(--secondary);
-    box-shadow: 0 30px 60px -12px rgba(0, 212, 255, 0.3);
+    transform: translate(-4px, -4px);
+    background: #fff;
+    border-color: var(--primary);
+    box-shadow: 12px 12px 0px var(--primary);
 }
 
 .card .icon {
@@ -101,68 +110,75 @@ body {
 }
 
 .card h2 {
-    font-size: 2rem;
+    font-size: 1.2rem;
     font-weight: 700;
     margin-bottom: 1rem;
-    color: #fff;
+    color: var(--secondary);
 }
 
-.badge {
-    background: var(--primary);
-    padding: 0.4rem 1rem;
-    border-radius: 30px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 1px;
+.icon-container {
+    width: 70px;
+    /* Bit smaller icon background */
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    border: 4px solid var(--secondary);
+    border-radius: 12px;
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.1);
+    font-size: 2.5rem;
+    /* Smaller emoji size */
 }
 
-/* Background Image Overlay */
-.bg-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
+.icon-container img.pixel-icon {
+    width: 70%;
+    /* Smaller icon image */
+    height: 70%;
+}
+
+.header-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.header-asset {
+    width: 450px;
+    max-width: 90vw;
+    height: auto;
+    image-rendering: pixelated;
+    z-index: 5;
+}
+
+.icon-container {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+}
+
+.pixel-icon {
     width: 100%;
     height: 100%;
-    background: url('assets/banner.png') center/cover no-repeat;
-    opacity: 0.15;
-    z-index: -3;
-    pointer-events: none;
-    filter: saturate(1.8) contrast(1.2);
+    object-fit: contain;
+    image-rendering: pixelated;
 }
 
-/* Animated Background Shapes */
-.shape {
-    position: fixed;
-    border-radius: 50%;
-    z-index: -2;
-    filter: blur(100px);
-    animation: shapeAnim 25s infinite alternate ease-in-out;
-}
 
-.shape-1 {
-    width: 500px;
-    height: 500px;
-    background: rgba(255, 0, 122, 0.3);
-    top: -10%;
-    left: -10%;
-}
 
-.shape-2 {
-    width: 400px;
-    height: 400px;
-    background: rgba(0, 212, 255, 0.3);
-    bottom: -5%;
-    right: -5%;
-    animation-delay: -7s;
-}
-
-.shape-3 {
-    width: 350px;
-    height: 350px;
-    background: rgba(255, 234, 0, 0.2);
-    top: 40%;
-    right: 20%;
-    animation-delay: -15s;
+footer {
+    margin-top: 5rem;
+    opacity: 0.8;
+    font-size: 0.6rem;
+    text-align: center;
+    width: 100%;
+    border-top: 4px solid var(--secondary);
+    padding: 2rem 0;
 }
 
 @keyframes shapeAnim {
@@ -171,7 +187,7 @@ body {
     }
 
     100% {
-        transform: translate(150px, 100px) scale(1.3);
+        transform: translate(50px, 50px) scale(1.1);
     }
 }
 
@@ -187,7 +203,7 @@ body {
     }
 
     50% {
-        transform: translateY(-15px);
+        transform: translateY(-10px);
     }
 }
 
