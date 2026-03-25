@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Minesweeper: Safe Passage 🇧🇦</title>
+    <style>
+        /* BASE STYLES & BACKGROUND */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+            background-color: #f0f0f0;
+
+            /* Bosnian Flag - placed once, top right - USING PROVIDED URL */
+            background-image:
+                url("https://upload.wikimedia.org/wikipedia/commons/b/bf/Flag_of_Bosnia_and_Herzegovina.svg"), 
+                /* Subtle Repeating Landmine - This image code remains correct */
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000000' opacity='0.03' d='M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 2v2h2v2h-2v2h-2v-2h-2v-2h2V6zm0 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat, repeat;
+            background-position: top 20px right 20px, 0 0;
+            /* Key Change: Increased flag size to 180px */
+            background-size: 180px auto, 50px 50px; 
+            background-attachment: fixed;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        #scenario {
+            /* Increased width slightly to accommodate larger content */
+            width: 450px; 
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #scenario h2 {
+            margin: 5px 0 10px 0;
+            color: #444;
+        }
+
+        #start-point, #end-point {
+            font-size: 1.8em; /* Increased text size for bigger elements */
+            font-weight: bold;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            background-color: #e0f7fa;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        #start-point {
+            border-bottom: 3px solid #00bcd4;
+        }
+
+        #end-point {
+            border-top: 3px solid #00bcd4;
+        }
+
+        #game-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        #game-info {
+            margin-bottom: 20px;
+            font-size: 1.5em; /* Increased text size */
+            font-weight: bold;
+            color: #555;
+        }
+
+        #grid {
+            display: grid;
+            border: 2px solid #333;
+            box-shadow: 5px 5px 10px rgba(0,0,0,0.5);
+        }
+
+        /* GRID CELLS - Size is 40px */
+        .cell {
+            width: 40px;
+            height: 40px;
+            background-color: #ccc;
+            border: 1px solid #777;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.2em; /* Increased font size */
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .cell.revealed {
+            background-color: #eee;
+            border: 1px solid #bbb;
+            cursor: default;
+        }
+
+        .cell.mine {
+            background-color: red;
+            color: white;
+            animation: mineReveal 0.5s ease-out;
+        }
+        
+        @keyframes mineReveal {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+
+        /* Number Colors */
+        .cell[data-count="1"] { color: blue; }
+        .cell[data-count="2"] { color: green; }
+        .cell[data-count="3"] { color: red; }
+        .cell[data-count="4"] { color: navy; }
+        .cell[data-count="5"] { color: maroon; }
+        .cell[data-count="6"] { color: teal; }
+        .cell[data-count="7"] { color: black; }
+        .cell[data-count="8"] { color: gray; }
+
+        .flag {
+            color: red;
+            font-size: 1.5em; /* Increased flag size */
+        }
+
+        /* POPUP/MODAL STYLES */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            backdrop-filter: blur(3px);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            max-width: 80%;
+            animation: fadeIn 0.5s;
+        }
+
+        .modal-content h2 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        .modal-content p {
+            font-size: 1.4em;
+            margin-bottom: 30px;
+        }
+
+        .win-message { color: green; }
+        .loss-message { color: red; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* BUTTON */
+        button {
+            padding: 12px 24px;
+            margin-top: 15px;
+            font-size: 1.1em;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Minesweeper 2: Bosnia and Herzegovina</h1>
+
+    <div id="scenario">
+        <h2>Mission Briefing</h2>
+        <p>You are just an ordinary Bosnian child, Your goal is to receive education, clear all 15 hidden mines to ensure a safe journey.</p>
+    </div>
+
+    <div id="game-area">
+        
+        <div id="start-point">
+            🏡 Your House
+        </div>
+
+        <div id="game-info">
+            Mines Remaining: <span id="mines-left">15</span>
+        </div>
+        
+        <div id="grid"></div>
+
+        <div id="end-point">
+            📚 The School
+        </div>
+    </div>
+    
+    <div id="gameOverModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle"></h2>
+            <p id="modalMessage"></p>
+            <button onclick="closeModal(); initGame();">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE = 10;
+        const MINE_COUNT = 15;
+        const gridElement = document.getElementById('grid');
+        const minesLeftElement = document.getElementById('mines-left');
+        const modalElement = document.getElementById('gameOverModal');
+        const modalTitleElement = document.getElementById('modalTitle');
+        const modalMessageElement = document.getElementById('modalMessage');
+
+        let board = [];
+        let isGameOver = false;
+        let cellsRevealed = 0;
+
+        /**
+         * Initializes the game board and sets up the event listeners.
+         */
+        function initGame() {
+            isGameOver = false;
+            cellsRevealed = 0;
+            board = [];
+            closeModal(); // Ensure modal is closed on restart
+            minesLeftElement.textContent = MINE_COUNT;
+            gridElement.innerHTML = '';
+            gridElement.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 1fr)`;
+
+            // 1. Create the board structure
+            for (let i = 0; i < GRID_SIZE; i++) {
+                board[i] = [];
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const cell = {
+                        isMine: false,
+                        isRevealed: false,
+                        isFlagged: false,
+                        mineCount: 0,
+                        element: createCellElement(i, j)
+                    };
+                    board[i][j] = cell;
+                    gridElement.appendChild(cell.element);
+                }
+            }
+
+            // 2. Place the mines
+            placeMines();
+
+            // 3. Calculate adjacent mine counts
+            calculateMineCounts();
+        }
+
+        /**
+         * Creates a single cell DOM element.
+         */
+        function createCellElement(row, col) {
+            const cellElement = document.createElement('div');
+            cellElement.classList.add('cell');
+            cellElement.dataset.row = row;
+            cellElement.dataset.col = col;
+
+            // Handle left-click (reveal)
+            cellElement.addEventListener('click', () => revealCell(row, col));
+
+            // Handle right-click (flag)
+            cellElement.addEventListener('contextmenu', (e) => {
+                e.preventDefault(); // Prevent browser context menu
+                toggleFlag(row, col);
+            });
+
+            return cellElement;
+        }
+
+        function placeMines() {
+            let minesPlaced = 0;
+            while (minesPlaced < MINE_COUNT) {
+                const row = Math.floor(Math.random() * GRID_SIZE);
+                const col = Math.floor(Math.random() * GRID_SIZE);
+
+                if (!board[row][col].isMine) {
+                    board[row][col].isMine = true;
+                    minesPlaced++;
+                }
+            }
+        }
+
+        function calculateMineCounts() {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (!board[i][j].isMine) {
+                        let count = 0;
+                        for (const [dr, dc] of getNeighbors(i, j)) {
+                            if (board[dr][dc] && board[dr][dc].isMine) {
+                                count++;
+                            }
+                        }
+                        board[i][j].mineCount = count;
+                    }
+                }
+            }
+        }
+
+        function getNeighbors(r, c) {
+            const neighbors = [];
+            const offsets = [
+                [-1, -1], [-1, 0], [-1, 1],
+                [0, -1],           [0, 1],
+                [1, -1], [1, 0], [1, 1]
+            ];
+
+            for (const [dr, dc] of offsets) {
+                const nr = r + dr;
+                const nc = c + dc;
+                if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+                    neighbors.push([nr, nc]);
+                }
+            }
+            return neighbors;
+        }
+
+        function revealCell(r, c) {
+            if (isGameOver || board[r][c].isRevealed || board[r][c].isFlagged) {
+                return;
+            }
+
+            const cell = board[r][c];
+            cell.isRevealed = true;
+            cell.element.classList.add('revealed');
+
+            if (cell.isMine) {
+                cell.element.classList.add('mine');
+                cell.element.textContent = '💣';
+                gameOver(false); // Player lost
+                return;
+            }
+
+            cellsRevealed++;
+
+            if (cell.mineCount > 0) {
+                cell.element.textContent = cell.mineCount;
+                cell.element.dataset.count = cell.mineCount;
+            } else {
+                for (const [dr, dc] of getNeighbors(r, c)) {
+                    revealCell(dr, dc);
+                }
+            }
+
+            checkWin();
+        }
+
+        function toggleFlag(r, c) {
+            if (isGameOver || board[r][c].isRevealed) {
+                return;
+            }
+
+            const cell = board[r][c];
+            cell.isFlagged = !cell.isFlagged;
+
+            if (cell.isFlagged) {
+                cell.element.textContent = '🚩';
+                cell.element.classList.add('flag');
+            } else {
+                cell.element.textContent = '';
+                cell.element.classList.remove('flag');
+            }
+
+            let flagsCount = 0;
+            for (let row of board) {
+                for (let cell of row) {
+                    if (cell.isFlagged) flagsCount++;
+                }
+            }
+            minesLeftElement.textContent = MINE_COUNT - flagsCount;
+        }
+
+        function checkWin() {
+            if (cellsRevealed === (GRID_SIZE * GRID_SIZE) - MINE_COUNT) {
+                gameOver(true);
+            }
+        }
+        
+        function closeModal() {
+            modalElement.style.display = 'none';
+        }
+
+        /**
+         * Ends the game, displays a popup, and reveals all remaining mines.
+         */
+        function gameOver(isWin) {
+            isGameOver = true;
+            
+            // Set up Modal Content
+            if (isWin) {
+                modalTitleElement.textContent = '✅ MISSION SUCCESS! 🎉';
+                modalMessageElement.textContent = 'You made it this time. Congratulations on clearing the mines we go again tomorrow!';
+                modalTitleElement.classList.remove('loss-message');
+                modalTitleElement.classList.add('win-message');
+            } else {
+                modalTitleElement.textContent = '🛑 MISSION FAILED! 💥';
+                modalMessageElement.textContent = 'You were blown up by a Croatian ERW';
+                modalTitleElement.classList.remove('win-message');
+                modalTitleElement.classList.add('loss-message');
+            }
+            
+            // Show the Modal
+            modalElement.style.display = 'flex'; // Use flex to center content
+
+            // Reveal all mines on the grid
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const cell = board[i][j];
+                    if (cell.isMine && !cell.isRevealed) {
+                        cell.element.classList.add('mine');
+                        cell.element.textContent = '💣';
+                        cell.element.classList.remove('flag');
+                    }
+                    cell.element.style.cursor = 'default';
+                }
+            }
+        }
+
+        // Start the game when the page loads
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>

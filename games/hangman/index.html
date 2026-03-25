@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-Themed Hangman Party Game (Dynamically Sized)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Open+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- General & Layout Styles --- */
+        body {
+            font-family: 'Open Sans', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #34495e;
+            padding: 20px;
+            box-sizing: border-box;
+
+            /* --- CUSTOM BACKGROUND IMAGE --- */
+            /* Replace 'YOUR_IMAGE_URL_HERE.jpg' with the actual URL of your image */
+            background-image: url(https://media.gettyimages.com/id/567909621/nl/video/shot-of-clan-rally-in-woods-with-cross-burning.jpg?s=640x640&k=20&c=P_-WTmsc0EDWNp9EBZ7iOHKc2-7ytWRDLNVjgM9slfc=); 
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed; 
+            background-color: #c3cfe2; 
+        }
+
+        /* --- CONTAINER OPACITY FIX --- */
+        .container {
+            /* Changed from solid white (#ffffff) to rgba white with 90% opacity (0.9) */
+            background-color: rgba(255, 255, 255, 0.9); 
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 30px 40px;
+            text-align: center;
+            max-width: 90%;
+            width: 700px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-family: 'Pacifico', cursive;
+            color: #e74c3c;
+            margin-bottom: 15px;
+            font-size: 2.8em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        p {
+            font-size: 1.1em;
+            margin-top: 0;
+            color: #555;
+        }
+
+        #word-display {
+            font-family: 'Courier New', monospace;
+            font-size: 3.5em; 
+            margin: 30px 0;
+            font-weight: bold;
+            color: #2c3e50;
+            min-height: 1.5em; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            box-sizing: border-box;
+            width: 100%; 
+        }
+        
+        @media (max-width: 768px) {
+            #word-display {
+                font-size: 2.5em;
+            }
+        }
+        @media (max-width: 480px) {
+            #word-display {
+                font-size: 1.8em; 
+            }
+        }
+
+        #guesses-container {
+            margin: 25px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        #guesses-container button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 18px;
+            min-width: 45px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #guesses-container button:hover:not(:disabled) {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        #guesses-container button:disabled {
+            background-color: #bdc3c7;
+            color: #7f8c8d;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .correct-guess {
+            background-color: #2ecc71 !important;
+        }
+
+        .incorrect-guess {
+            background-color: #e74c3c !important;
+        }
+
+        #message {
+            font-size: 1.6em;
+            font-weight: bold;
+            min-height: 40px;
+            margin-top: 20px;
+            color: #34495e;
+        }
+
+        .game-controls {
+            margin-top: 25px;
+            display: flex;
+            justify-content: center;
+            gap: 15px; 
+        }
+        
+        .game-button {
+            background-color: #8e44ad;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .game-button:hover {
+            background-color: #9b59b6;
+            transform: translateY(-3px);
+        }
+        
+        #hint-button {
+            background-color: #f39c12;
+        }
+        #hint-button:hover {
+            background-color: #e67e22;
+        }
+        #hint-button:disabled {
+            background-color: #ccc;
+        }
+        
+        #canvas-container {
+            margin: 25px 0;
+            border: 2px solid #ccc;
+            /* Ensure the canvas background is still solid white for drawing clarity */
+            background-color: white; 
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🥳 Ku Klux Klan Wordle 🥳</h1>
+        <p>Say the N-word or you'll hang</p>
+
+        <div id="canvas-container">
+            <canvas id="hangman-canvas" width="300" height="250"></canvas>
+        </div>
+
+        <div id="word-display"></div>
+
+        <div id="guesses-container">
+        </div>
+
+        <div id="message"></div>
+        
+        <div class="game-controls">
+            <button class="game-button" onclick="startGame()">Start New Game</button>
+            <button class="game-button" id="hint-button" onclick="getHint()">Get Hint (-2 Guesses)</button>
+        </div>
+    </div>
+
+    <script>
+        const words = [
+            "NIGGER", "NICKR", "NACHO", "NADIR", "NAILS", "NAIVE", "NAKED", "NAMED", "NAMES", "NANCY", "NANNY", "NASAL", "NASTY", "NATAL", "NAVAL", "NAVEL", "NECKS", "NEEDS", "NEEDY", "NEIGH", "NELLY", "NERDS", "NERDY", "NERVE", "NESTS", "NEURO", "NEVER", "NEWER", "NEWLY", "NEXUS", "NICER", "NICHE", "NICKS", "NICKY", "NIECE", "NIFTY", "NIGHT", "NINJA", "NINNY", "NINTH", "NITRO", "NOBLE", "NOBLY", "NODES", "NOISE", "NOISY", "NOMAD", "NOOSE", "NORMA", "NORMS", "NORTH", "NOSED", "NOSES", "NOSEY", "NOTCH", "NOTED", "NOTES", "NOUNS", "NOVEL", "NUDES", "NUDGE", "NUKES", "NURSE", "NUTTY", "NYLON", "NYMPH"
+        ];
+
+        let secretWord;
+        let guessedLetters;
+        let incorrectGuesses;
+        const maxIncorrectGuesses = 6;
+        let gameActive = false;
+
+        const canvas = document.getElementById('hangman-canvas');
+        const ctx = canvas.getContext('2d');
+        const wordDisplay = document.getElementById('word-display');
+        const guessesContainer = document.getElementById('guesses-container');
+        const messageElement = document.getElementById('message');
+        const hintButton = document.getElementById('hint-button');
+
+        /* --- Game Control Functions --- */
+
+        function startGame() {
+            secretWord = words[Math.floor(Math.random() * words.length)].toUpperCase();
+            
+            if (secretWord[0] !== 'N') {
+                 console.error(`Word selected (${secretWord}) does not start with 'N'.`);
+            }
+            
+            guessedLetters = ['N'];
+            incorrectGuesses = 0;
+            gameActive = true;
+
+            messageElement.textContent = '';
+            messageElement.style.color = '#34495e';
+            hintButton.disabled = false;
+            
+            drawHangman();
+            createLetterButtons();
+            updateWordDisplay(); 
+        }
+
+        function createLetterButtons() {
+            guessesContainer.innerHTML = '';
+            for (let i = 0; i < 26; i++) {
+                const letter = String.fromCharCode(65 + i);
+                const button = document.createElement('button');
+                button.textContent = letter;
+                button.id = 'btn-' + letter;
+                button.onclick = () => handleGuess(letter);
+
+                if (letter === 'N') {
+                    button.disabled = true;
+                    button.className = 'correct-guess';
+                }
+                guessesContainer.appendChild(button);
+            }
+        }
+
+        function updateWordDisplay() {
+            let wordComplete = true;
+
+            const displayArray = secretWord.split('').map(char => {
+                if (guessedLetters.includes(char)) {
+                    return char;
+                } else {
+                    wordComplete = false;
+                    return '_';
+                }
+            });
+            
+            const currentDisplay = displayArray.join('');
+            wordDisplay.textContent = currentDisplay;
+
+            const wordLength = secretWord.length;
+            const containerWidth = wordDisplay.offsetWidth; 
+            
+            const computedStyle = window.getComputedStyle(wordDisplay);
+            const fontSize = parseFloat(computedStyle.fontSize);
+            
+            const estimatedLetterWidth = fontSize * 0.6; 
+
+            let spacingInPixels = (containerWidth / wordLength) - estimatedLetterWidth;
+
+            spacingInPixels = Math.max(0, spacingInPixels); 
+            
+            if (spacingInPixels < 0.5 && wordLength > 10) { 
+                spacingInPixels = 0.5;
+            } else if (spacingInPixels < 2 && wordLength <= 10) {
+                spacingInPixels = 2; 
+            }
+            
+
+            wordDisplay.style.letterSpacing = `${spacingInPixels}px`;
+
+            if (gameActive && wordComplete) {
+                endGame(true);
+            }
+        }
+
+        function handleGuess(letter) {
+            if (!gameActive || guessedLetters.includes(letter)) return;
+
+            const button = document.getElementById('btn-' + letter);
+            
+            guessedLetters.push(letter); 
+            
+            if (button) {
+                button.disabled = true;
+            }
+
+            if (secretWord.includes(letter)) {
+                if (button) button.className = 'correct-guess';
+                updateWordDisplay(); 
+            } else {
+                if (button) button.className = 'incorrect-guess';
+                incorrectGuesses++;
+                drawHangman();
+                
+                if (incorrectGuesses >= maxIncorrectGuesses) {
+                    endGame(false);
+                }
+            }
+        }
+
+        function getHint() {
+            if (!gameActive) {
+                messageElement.textContent = 'Start a new game first!';
+                return;
+            }
+            if (incorrectGuesses + 2 > maxIncorrectGuesses) {
+                messageElement.textContent = `🚨 Not enough guesses left for a hint! (Need ${maxIncorrectGuesses - incorrectGuesses} more)`;
+                messageElement.style.color = '#f39c12';
+                hintButton.disabled = true;
+                return;
+            }
+
+            let unguessed = secretWord.split('').find(char => !guessedLetters.includes(char));
+
+            if (unguessed) {
+                incorrectGuesses += 2;
+                handleGuess(unguessed);
+                drawHangman();
+                
+                messageElement.textContent = `💡 Hint used! The letter '${unguessed}' was revealed. (-2 guesses)`;
+                messageElement.style.color = '#f39c12';
+            } else {
+                messageElement.textContent = 'The word is almost complete, no hint needed!';
+                hintButton.disabled = true;
+                messageElement.style.color = '#f39c12';
+            }
+            if (incorrectGuesses >= maxIncorrectGuesses) {
+                 endGame(false);
+            }
+        }
+        
+        function endGame(won) {
+            gameActive = false;
+            document.querySelectorAll('#guesses-container button').forEach(btn => {
+                btn.disabled = true;
+            });
+            hintButton.disabled = true;
+
+            if (won) {
+                messageElement.textContent = '🎉 Congratulations! You guessed the N-word, the Grand Wizard will see you now!';
+                messageElement.style.color = '#2ecc71';
+            } else {
+                messageElement.textContent = `💀 Too bad Nigga the word was ${secretWord}.`;
+                updateWordDisplay(); 
+                messageElement.style.color = '#e74c3c';
+            }
+        }
+        
+        /* --- Keyboard Input --- */
+        
+        function handleKeyPress(event) {
+            if (!gameActive) return;
+
+            const letter = event.key.toUpperCase();
+            if (letter.length === 1 && letter >= 'A' && letter <= 'Z') {
+                const button = document.getElementById('btn-' + letter);
+                
+                if (button && !button.disabled) {
+                    handleGuess(letter);
+                }
+            }
+        }
+        document.addEventListener('keydown', handleKeyPress);
+
+
+        /* --- Hangman Drawing Functions --- */
+
+        function drawHangman() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+
+            // 1. Gallows Base
+            ctx.moveTo(50, 240);
+            ctx.lineTo(250, 240);
+            ctx.stroke();
+
+            // 2. Gallows Pole
+            ctx.moveTo(100, 240);
+            ctx.lineTo(100, 20);
+            ctx.stroke();
+
+            // 3. Crossbeam
+            ctx.lineTo(200, 20);
+            ctx.stroke();
+
+            // 4. Rope/Noose
+            ctx.moveTo(200, 20);
+            ctx.lineTo(200, 50);
+            ctx.stroke();
+            
+            ctx.lineWidth = 2;
+
+            switch (incorrectGuesses) {
+                case 6: // Right Leg
+                    ctx.beginPath();
+                    ctx.moveTo(200, 170);
+                    ctx.bezierCurveTo(210, 185, 225, 205, 230, 200);
+                    ctx.stroke();
+                    ctx.arc(230, 200, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                case 5: // Left Leg
+                    ctx.beginPath();
+                    ctx.moveTo(200, 170);
+                    ctx.bezierCurveTo(190, 185, 175, 205, 170, 200);
+                    ctx.stroke();
+                    ctx.arc(170, 200, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                case 4: // Right Arm
+                    ctx.beginPath();
+                    ctx.moveTo(200, 105);
+                    ctx.bezierCurveTo(220, 120, 230, 140, 240, 130);
+                    ctx.stroke();
+                    ctx.arc(240, 130, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                case 3: // Left Arm
+                    ctx.beginPath();
+                    ctx.moveTo(200, 105);
+                    ctx.bezierCurveTo(180, 120, 170, 140, 160, 130);
+                    ctx.stroke();
+                    ctx.arc(160, 130, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                case 2: // Body
+                    ctx.moveTo(200, 90);
+                    ctx.lineTo(200, 170);
+                    ctx.stroke();
+                case 1: // Head
+                    ctx.beginPath();
+                    ctx.arc(200, 70, 20, 0, Math.PI * 2, true);
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+                    ctx.stroke();
+            }
+        }
+
+        // Initialize the game when the page loads
+        window.onload = startGame;
+
+        // Also call updateWordDisplay on window resize to re-calculate spacing
+        window.addEventListener('resize', updateWordDisplay);
+    </script>
+</body>
+</html>
